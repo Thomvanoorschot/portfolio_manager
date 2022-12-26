@@ -1,13 +1,13 @@
-package importing
+package handlers
 
 import (
 	"encoding/csv"
 	"fmt"
 	"github.com/Thomvanoorschot/portfolioManager/app/data/entities"
-	"github.com/Thomvanoorschot/portfolioManager/app/infrastructure"
+	"github.com/Thomvanoorschot/portfolioManager/app/server"
+	"github.com/valyala/fasthttp"
 	"io"
 	"log"
-	"net/http"
 	"regexp"
 	"strconv"
 	"strings"
@@ -22,9 +22,9 @@ type Commission struct {
 }
 type Commissions []*Commission
 
-func DegiroImportHandler(server *infrastructure.Server, r *http.Request) {
-	file, handler, _ := r.FormFile("file")
-	print(handler.Filename)
+func DegiroImportHandler(server *server.Webserver, ctx *fasthttp.RequestCtx) {
+	fileHeader, _ := ctx.FormFile("file")
+	file, _ := fileHeader.Open()
 	reader := csv.NewReader(file)
 	firstLineProcessed := false
 

@@ -4,12 +4,16 @@ go 1.19
 
 require (
 	github.com/Rhymond/go-money v1.0.9
-	github.com/gorilla/mux v1.8.0
+	github.com/fasthttp/router v1.4.14
+	github.com/google/uuid v1.3.0
+	github.com/valyala/fasthttp v1.43.0
+	gitlab.com/metakeule/fmtdate v1.2.2
+	gorm.io/driver/postgres v1.4.5
 	gorm.io/gorm v1.24.1-0.20221019064659-5dd2bb482755
 )
 
 require (
-	github.com/google/uuid v1.3.0 // indirect
+	github.com/andybalholm/brotli v1.0.4 // indirect
 	github.com/jackc/chunkreader/v2 v2.0.1 // indirect
 	github.com/jackc/pgconn v1.13.0 // indirect
 	github.com/jackc/pgio v1.0.0 // indirect
@@ -20,8 +24,9 @@ require (
 	github.com/jackc/pgx/v4 v4.17.2 // indirect
 	github.com/jinzhu/inflection v1.0.0 // indirect
 	github.com/jinzhu/now v1.1.5 // indirect
-	gitlab.com/metakeule/fmtdate v1.2.2 // indirect
+	github.com/klauspost/compress v1.15.13 // indirect
+	github.com/savsgio/gotils v0.0.0-20220530130905-52f3993e8d6d // indirect
+	github.com/valyala/bytebufferpool v1.0.0 // indirect
 	golang.org/x/crypto v0.0.0-20220722155217-630584e8d5aa // indirect
 	golang.org/x/text v0.3.7 // indirect
-	gorm.io/driver/postgres v1.4.5 // indirect
 )

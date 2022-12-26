@@ -2,6 +2,7 @@ package repositories
 
 import (
 	"github.com/Thomvanoorschot/portfolioManager/app/data/entities"
+	"github.com/google/uuid"
 	"gorm.io/gorm"
 )
 
@@ -17,20 +18,20 @@ func (p *TransactionRepository) Create(transaction *entities.Transaction) {
 	p.DB.Create(transaction)
 }
 
-func (p *TransactionRepository) GetDepositAndWithdrawalTransactions() *entities.Transactions {
+func (p *TransactionRepository) GetDepositAndWithdrawalTransactions(id uuid.UUID) *entities.Transactions {
 	transactions := &entities.Transactions{}
-	p.DB.Where("transaction_type IN ?", []entities.TransactionType{entities.Withdrawal, entities.Deposit}).Order("transacted_at asc").Find(transactions)
+	p.DB.Where("transaction_type IN ? AND portfolio_id = ?", []entities.TransactionType{entities.Withdrawal, entities.Deposit}, id).Order("transacted_at asc").Find(transactions)
 	return transactions
 }
 
-func (p *TransactionRepository) GetBuyAndSellTransactions() *entities.Transactions {
+func (p *TransactionRepository) GetBuyAndSellTransactions(id uuid.UUID) *entities.Transactions {
 	transactions := &entities.Transactions{}
-	p.DB.Where("transaction_type IN ?", []entities.TransactionType{entities.Buy, entities.Sell}).Order("transacted_at asc").Find(transactions)
+	p.DB.Where("transaction_type IN ? AND portfolio_id = ?", []entities.TransactionType{entities.Buy, entities.Sell}, id).Order("transacted_at asc").Find(transactions)
 	return transactions
 }
 
-func (p *TransactionRepository) GetUniqueSymbols() []string {
+func (p *TransactionRepository) GetUniqueSymbols(id uuid.UUID) []string {
 	var symbols []string
-	p.DB.Model(&entities.Transaction{}).Where("symbol IS NOT NULL").Distinct("symbol").Find(&symbols)
+	p.DB.Model(&entities.Transaction{}).Where("symbol IS NOT NULL AND portfolio_id = ?", id).Distinct("symbol").Find(&symbols)
 	return symbols
 }

@@ -1,11 +1,12 @@
-package importing
+package handlers
 
 import (
 	"encoding/csv"
 	"encoding/json"
 	"fmt"
 	"github.com/Thomvanoorschot/portfolioManager/app/data/entities"
-	"github.com/Thomvanoorschot/portfolioManager/app/infrastructure"
+	"github.com/Thomvanoorschot/portfolioManager/app/server"
+	"github.com/valyala/fasthttp"
 	"gitlab.com/metakeule/fmtdate"
 	"io"
 	"log"
@@ -18,10 +19,9 @@ type HistoricalDataImport struct {
 	Ticker string `json:"ticker"`
 }
 
-func HistoricalDataImportHandler(server *infrastructure.Server, r *http.Request) {
-	decoder := json.NewDecoder(r.Body)
+func HistoricalDataImportHandler(server *server.Webserver, ctx *fasthttp.RequestCtx) {
 	var t HistoricalDataImport
-	err := decoder.Decode(&t)
+	err := json.Unmarshal(ctx.Request.Body(), &t)
 	if err != nil {
 		panic(err)
 	}
