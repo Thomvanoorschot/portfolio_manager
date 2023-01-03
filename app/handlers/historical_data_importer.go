@@ -41,7 +41,9 @@ func HistoricalDataImportHandler(server *server.Webserver, ctx *fasthttp.Request
 	reader := csv.NewReader(resp.Body)
 	firstLineProcessed := false
 
-	var historicalDataList []entities.HistoricalData
+	historicalData := entities.HistoricalData{
+		Symbol: t.Ticker,
+	}
 
 	for {
 		line, readError := reader.Read()
@@ -53,15 +55,14 @@ func HistoricalDataImportHandler(server *server.Webserver, ctx *fasthttp.Request
 			firstLineProcessed = true
 			continue
 		}
-		convertLine(t.Ticker, line, &historicalDataList)
+		convertLine(line, &historicalData.Entries)
 	}
-	server.UnitOfWork.HistoricalDataRepository.BatchInsert(&historicalDataList)
+	server.UnitOfWork.HistoricalDataRepository.Insert(&historicalData)
 }
 
-func convertLine(ticker string, line []string, historicalDataList *[]entities.HistoricalData) {
+func convertLine(line []string, historicalDataList *[]entities.HistoricalDataEntry) {
 	timestamp, _ := fmtdate.Parse("YYYY-MM-DD", line[0])
-	historicalData := entities.HistoricalData{}
-	historicalData.Ticker = ticker
+	historicalData := entities.HistoricalDataEntry{}
 	historicalData.Timestamp = timestamp
 	open, _ := strconv.ParseFloat(line[1], 64)
 	historicalData.Open = open

@@ -1,15 +1,20 @@
 package entities
 
-import "time"
+import (
+	"time"
+)
 
 type HistoricalData struct {
-	Ticker        string
-	Timestamp     time.Time
-	Open          float64
-	High          float64
-	Low           float64
-	Close         float64
-	AdjustedClose float64
-	Volume        int
-	EntityBase
+	Symbol  string                `bson:"_id,omitempty"`
+	Entries []HistoricalDataEntry `bson:"entries,omitempty"`
+}
+
+type HistoricalDataEntry struct {
+	Timestamp     time.Time `bson:"timestamp,omitempty"`
+	Open          float64   `bson:"open,omitempty"`
+	High          float64   `bson:"high,omitempty"`
+	Low           float64   `bson:"low,omitempty"`
+	Close         float64   `bson:"close,omitempty"`
+	AdjustedClose float64   `bson:"adjustedClose,omitempty"`
+	Volume        int       `bson:"volume,omitempty"`
 }

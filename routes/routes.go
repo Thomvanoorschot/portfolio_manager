@@ -12,7 +12,7 @@ func SetupRoutes(server *server.Webserver) {
 	r.POST("/degiro-import", func(ctx *fasthttp.RequestCtx) {
 		handlers.DegiroImportHandler(server, ctx)
 	})
-	r.POST("/deposits", func(ctx *fasthttp.RequestCtx) {
+	r.POST("/historical-import", func(ctx *fasthttp.RequestCtx) {
 		handlers.HistoricalDataImportHandler(server, ctx)
 	})
 	r.GET("/deposits", func(ctx *fasthttp.RequestCtx) {
