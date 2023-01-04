@@ -30,8 +30,13 @@ func (p *TransactionRepository) GetBuyAndSellTransactions(id uuid.UUID) *entitie
 	return transactions
 }
 
-func (p *TransactionRepository) GetUniqueSymbols(id uuid.UUID) []string {
+func (p *TransactionRepository) GetUniqueSymbolsForPortfolio(id uuid.UUID) []string {
 	var symbols []string
 	p.DB.Model(&entities.Transaction{}).Where("symbol IS NOT NULL AND portfolio_id = ?", id).Distinct("symbol").Find(&symbols)
+	return symbols
+}
+func (p *TransactionRepository) GetUniqueSymbols() []string {
+	var symbols []string
+	p.DB.Model(&entities.Transaction{}).Where("symbol IS NOT NULL AND symbol != ?", "").Distinct("symbol").Find(&symbols)
 	return symbols
 }

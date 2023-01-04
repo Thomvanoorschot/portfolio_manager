@@ -7,8 +7,6 @@ import (
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/mongo"
 	"go.mongodb.org/mongo-driver/mongo/options"
-	"sync"
-	"time"
 )
 
 type HistoricalDataRepository struct {
@@ -21,40 +19,30 @@ func ProvideHistoricalDataRepository(database *mongo.Database) *HistoricalDataRe
 }
 
 func (p *HistoricalDataRepository) GetBySymbols(symbols []string) map[string][]entities.HistoricalDataEntry {
-	m := map[string][]entities.HistoricalDataEntry{}
-	wg := sync.WaitGroup{}
-	c := make(chan *entities.HistoricalData, len(symbols))
+	var historicalData []entities.HistoricalData
+	filter := bson.M{"_id": bson.M{"$in": symbols}}
 
-	for _, symbol := range symbols {
-		wg.Add(1)
-		go func(symbol string, c chan *entities.HistoricalData) {
-			historicalData := p.GetBySymbol(symbol)
-			c <- historicalData
-			wg.Done()
-		}(symbol, c)
-	}
-	wg.Wait()
-	close(c)
-	for data := range c {
-		m[data.Symbol] = data.Entries
+	find, _ := p.Collection.Find(context.TODO(), filter)
+	_ = find.All(context.TODO(), &historicalData)
+
+	m := make(map[string][]entities.HistoricalDataEntry)
+	for _, d := range historicalData {
+		m[d.Symbol] = d.Entries
 	}
 	return m
 }
 func (p *HistoricalDataRepository) GetBySymbol(symbol string) *entities.HistoricalData {
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-	defer cancel()
 	var historicalData entities.HistoricalData
 	filter := bson.D{{"_id", symbol}}
 
-	_ = p.Collection.FindOne(ctx, filter).Decode(&historicalData)
+	_ = p.Collection.FindOne(context.TODO(), filter).Decode(&historicalData)
 	return &historicalData
 }
 func (p *HistoricalDataRepository) Insert(historicalData *entities.HistoricalData) {
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-	defer cancel()
-
-	filter := bson.D{{"symbol", historicalData.Symbol}}
+	filter := bson.M{"_id": historicalData.Symbol}
 	upsert := true
-	_, err := p.Collection.ReplaceOne(ctx, filter, historicalData, &options.ReplaceOptions{Upsert: &upsert})
-	fmt.Println(err)
+	_, err := p.Collection.ReplaceOne(context.TODO(), filter, historicalData, &options.ReplaceOptions{Upsert: &upsert})
+	if err != nil {
+		fmt.Println(err)
+	}
 }

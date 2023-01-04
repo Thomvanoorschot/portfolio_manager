@@ -12,7 +12,7 @@ import (
 )
 
 func CashDepositsHandler(server *server.Webserver, ctx *fasthttp.RequestCtx) {
-	transactions := *server.UnitOfWork.TransactionRepository.GetDepositAndWithdrawalTransactions(uuid.MustParse("f00d8e0c-d73c-411a-891e-b59cf44e8d19"))
+	transactions := *server.UnitOfWork.TransactionRepository.GetDepositAndWithdrawalTransactions(uuid.MustParse("58ade236-bdec-444b-a98e-653f8a4eabc3"))
 	if len(transactions) == 0 {
 		return
 	}
@@ -37,6 +37,8 @@ func CashDepositsHandler(server *server.Webserver, ctx *fasthttp.RequestCtx) {
 		return
 	}
 	ctx.SetBody(marshal)
+	ctx.SetContentType("application/json")
+	ctx.Response.Header.Set("Access-Control-Allow-Origin", "*")
 	if err != nil {
 		fmt.Println(err)
 		return

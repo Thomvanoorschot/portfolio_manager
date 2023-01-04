@@ -48,7 +48,7 @@ type holding struct {
 
 func HistoricalDataHandler(server *server.Webserver, ctx *fasthttp.RequestCtx) {
 	transactionRepository := server.UnitOfWork.TransactionRepository
-	transactions := *transactionRepository.GetBuyAndSellTransactions(uuid.MustParse("f00d8e0c-d73c-411a-891e-b59cf44e8d19"))
+	transactions := *transactionRepository.GetBuyAndSellTransactions(uuid.MustParse("58ade236-bdec-444b-a98e-653f8a4eabc3"))
 	if len(transactions) == 0 {
 		return
 	}
@@ -56,7 +56,7 @@ func HistoricalDataHandler(server *server.Webserver, ctx *fasthttp.RequestCtx) {
 	firstTransaction := transactions[0]
 	start := helpers.TruncateToDay(firstTransaction.TransactedAt)
 	end := helpers.TruncateToDay(time.Now())
-	uniqueSymbols := transactionRepository.GetUniqueSymbols(uuid.MustParse("f00d8e0c-d73c-411a-891e-b59cf44e8d19"))
+	uniqueSymbols := transactionRepository.GetUniqueSymbolsForPortfolio(uuid.MustParse("58ade236-bdec-444b-a98e-653f8a4eabc3"))
 	historicalDataPerSymbol := server.UnitOfWork.HistoricalDataRepository.GetBySymbols(uniqueSymbols)
 
 	holdings := safeHoldingsPerDay{
@@ -138,6 +138,8 @@ func HistoricalDataHandler(server *server.Webserver, ctx *fasthttp.RequestCtx) {
 		return
 	}
 	ctx.SetBody(marshal)
+	ctx.SetContentType("application/json")
+	ctx.Response.Header.Set("Access-Control-Allow-Origin", "*")
 	if err != nil {
 		fmt.Println(err)
 		return
