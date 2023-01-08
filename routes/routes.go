@@ -19,7 +19,10 @@ func SetupRoutes(server *server.Webserver) {
 		handlers.CashDepositsHandler(server, ctx)
 	})
 	r.GET("/holdings", func(ctx *fasthttp.RequestCtx) {
-		handlers.HistoricalDataHandler(server, ctx)
+		handlers.HoldingsHandler(server, ctx)
 	})
+	//r.GET("/trades", func(ctx *fasthttp.RequestCtx) {
+	//	handlers.TradesHandler(server, ctx)
+	//})
 	server.Handler = r.Handler
 }

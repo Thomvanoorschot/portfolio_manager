@@ -12,41 +12,13 @@ import (
 	"time"
 )
 
-type safeHoldingsPerDay struct {
-	sync.RWMutex
-	holdingsPerDay map[time.Time]*safeHoldings
-}
-
-func (sn *safeHoldingsPerDay) Get(d time.Time) *safeHoldings {
-	sn.RLock()
-	defer sn.RUnlock()
-	return sn.holdingsPerDay[d]
-}
-
-type safeHoldings struct {
-	sync.RWMutex
-	holdings map[string]*holding
-}
-
-func (sn *safeHoldings) Add(symbol string, holding *holding) {
-	sn.Lock()
-	defer sn.Unlock()
-	sn.holdings[symbol] = holding
-}
-
-func (sn *safeHoldings) Get(symbol string) *holding {
-	sn.RLock()
-	defer sn.RUnlock()
-	return sn.holdings[symbol]
-}
-
 type holding struct {
 	amount                 float64
 	symbolPriceAtGivenTime float64
 	total                  float64
 }
 
-func HistoricalDataHandler(server *server.Webserver, ctx *fasthttp.RequestCtx) {
+func HoldingsHandler(server *server.Webserver, ctx *fasthttp.RequestCtx) {
 	transactionRepository := server.UnitOfWork.TransactionRepository
 	transactions := *transactionRepository.GetBuyAndSellTransactions(uuid.MustParse("58ade236-bdec-444b-a98e-653f8a4eabc3"))
 	if len(transactions) == 0 {
@@ -59,12 +31,12 @@ func HistoricalDataHandler(server *server.Webserver, ctx *fasthttp.RequestCtx) {
 	uniqueSymbols := transactionRepository.GetUniqueSymbolsForPortfolio(uuid.MustParse("58ade236-bdec-444b-a98e-653f8a4eabc3"))
 	historicalDataPerSymbol := server.UnitOfWork.HistoricalDataRepository.GetBySymbols(uniqueSymbols)
 
-	holdings := safeHoldingsPerDay{
-		holdingsPerDay: map[time.Time]*safeHoldings{},
+	holdings := helpers.ThreadSafeMap[time.Time, helpers.ThreadSafeMap[string, holding]]{
+		Entries: map[time.Time]*helpers.ThreadSafeMap[string, holding]{},
 	}
-	holdings.holdingsPerDay[start] = &safeHoldings{
-		RWMutex:  sync.RWMutex{},
-		holdings: map[string]*holding{},
+	holdings.Entries[start] = &helpers.ThreadSafeMap[string, holding]{
+		RWMutex: sync.RWMutex{},
+		Entries: map[string]*holding{},
 	}
 	var resp [][]float64
 	for d := start; d.After(end) == false; d = d.AddDate(0, 0, 1) {
@@ -73,23 +45,23 @@ func HistoricalDataHandler(server *server.Webserver, ctx *fasthttp.RequestCtx) {
 			if !truncatedTransactedAt.Equal(d) {
 				continue
 			}
-			thisDaysHoldings := holdings.holdingsPerDay[truncatedTransactedAt]
-			thisDaysSymbolHoldings := thisDaysHoldings.holdings[transaction.Symbol]
+			thisDaysHoldings := holdings.Entries[truncatedTransactedAt]
+			thisDaysSymbolHoldings := thisDaysHoldings.Entries[transaction.Symbol]
 			if thisDaysSymbolHoldings == nil {
 				newHolding := &holding{}
-				thisDaysHoldings.holdings[transaction.Symbol] = newHolding
+				thisDaysHoldings.Entries[transaction.Symbol] = newHolding
 				thisDaysSymbolHoldings = newHolding
 			}
 			thisDaysSymbolHoldings.amount += transaction.Amount
 		}
 
 		var dayPrice float64
-		newSafeHoldings := &safeHoldings{
-			RWMutex:  sync.RWMutex{},
-			holdings: map[string]*holding{},
+		newSafeHoldings := &helpers.ThreadSafeMap[string, holding]{
+			RWMutex: sync.RWMutex{},
+			Entries: map[string]*holding{},
 		}
 		wg := sync.WaitGroup{}
-		currentHoldings := holdings.holdingsPerDay[d].holdings
+		currentHoldings := holdings.Entries[d].Entries
 		c := make(chan float64, len(currentHoldings))
 		for symbol, h := range currentHoldings {
 			wg.Add(1)
@@ -127,7 +99,7 @@ func HistoricalDataHandler(server *server.Webserver, ctx *fasthttp.RequestCtx) {
 		for elem := range c {
 			dayPrice += elem
 		}
-		holdings.holdingsPerDay[d.AddDate(0, 0, 1)] = newSafeHoldings
+		holdings.Entries[d.AddDate(0, 0, 1)] = newSafeHoldings
 
 		resp = append(resp, []float64{float64(d.UnixMilli()), math.Round(dayPrice*100) / 100})
 	}
