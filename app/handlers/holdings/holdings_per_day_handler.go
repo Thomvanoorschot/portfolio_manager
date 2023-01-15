@@ -1,7 +1,8 @@
-package handlers
+package holdings
 
 import (
 	"fmt"
+	"github.com/Thomvanoorschot/portfolioManager/app/data/entities"
 	"github.com/Thomvanoorschot/portfolioManager/app/helpers"
 	"github.com/Thomvanoorschot/portfolioManager/app/server"
 	"github.com/gin-gonic/gin"
@@ -18,7 +19,7 @@ type holding struct {
 	total                  float64
 }
 
-func HoldingsHandler(server *server.Webserver, ctx *gin.Context) {
+func PerDayHandler(server *server.Webserver, ctx *gin.Context) {
 	portfolioId := ctx.Param("portfolioId")
 
 	transactionRepository := server.UnitOfWork.TransactionRepository
@@ -105,6 +106,22 @@ func HoldingsHandler(server *server.Webserver, ctx *gin.Context) {
 
 		resp = append(resp, []float64{float64(d.UnixMilli()), math.Round(dayPrice*100) / 100})
 	}
+	allocations := entities.Allocations{}
+
+	var amountSum float64
+	for _, h := range holdings.Entries[end].Entries {
+		amountSum += h.total
+	}
+	for symbol, h := range holdings.Entries[end].Entries {
+		if h.amount == 0 {
+			continue
+		}
+		allocations.Entries = append(allocations.Entries, entities.Allocation{
+			Symbol:     symbol,
+			Percentage: h.total / amountSum * 100,
+		})
+	}
+	server.UnitOfWork.AllocationRepository.Upsert(portfolioId, allocations)
 
 	ctx.JSON(http.StatusOK, resp)
 }

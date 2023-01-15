@@ -33,6 +33,7 @@ func Create() *Webserver {
 		TransactionRepository:    &repositories.TransactionRepository{DB: db},
 		PortfolioRepository:      &repositories.PortfolioRepository{DB: db},
 		HistoricalDataRepository: repositories.ProvideHistoricalDataRepository(nosqlDb),
+		AllocationRepository:     repositories.ProvideAllocationRepository(nosqlDb),
 	}
 
 	return &Webserver{
