@@ -3,26 +3,23 @@ package routes
 import (
 	"github.com/Thomvanoorschot/portfolioManager/app/handlers"
 	"github.com/Thomvanoorschot/portfolioManager/app/server"
-	"github.com/fasthttp/router"
-	"github.com/valyala/fasthttp"
+	"github.com/gin-gonic/gin"
 )
 
 func SetupRoutes(server *server.Webserver) {
-	r := router.New()
-	r.POST("/degiro-import", func(ctx *fasthttp.RequestCtx) {
+	server.POST("/degiro-import", func(ctx *gin.Context) {
 		handlers.DegiroImportHandler(server, ctx)
 	})
-	r.POST("/historical-import", func(ctx *fasthttp.RequestCtx) {
+	server.POST("/historical-import", func(ctx *gin.Context) {
 		handlers.HistoricalDataImportHandler(server, ctx)
 	})
-	r.GET("/deposits", func(ctx *fasthttp.RequestCtx) {
+	server.GET("/deposits/:portfolioId", func(ctx *gin.Context) {
 		handlers.CashDepositsHandler(server, ctx)
 	})
-	r.GET("/holdings", func(ctx *fasthttp.RequestCtx) {
+	server.GET("/holdings/:portfolioId", func(ctx *gin.Context) {
 		handlers.HoldingsHandler(server, ctx)
 	})
-	//r.GET("/trades", func(ctx *fasthttp.RequestCtx) {
-	//	handlers.TradesHandler(server, ctx)
-	//})
-	server.Handler = r.Handler
+	server.GET("/trades/:portfolioId", func(ctx *gin.Context) {
+		handlers.TradesHandler(server, ctx)
+	})
 }

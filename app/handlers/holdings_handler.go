@@ -1,13 +1,13 @@
 package handlers
 
 import (
-	"encoding/json"
 	"fmt"
 	"github.com/Thomvanoorschot/portfolioManager/app/helpers"
 	"github.com/Thomvanoorschot/portfolioManager/app/server"
+	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
-	"github.com/valyala/fasthttp"
 	"math"
+	"net/http"
 	"sync"
 	"time"
 )
@@ -18,9 +18,11 @@ type holding struct {
 	total                  float64
 }
 
-func HoldingsHandler(server *server.Webserver, ctx *fasthttp.RequestCtx) {
+func HoldingsHandler(server *server.Webserver, ctx *gin.Context) {
+	portfolioId := ctx.Param("portfolioId")
+
 	transactionRepository := server.UnitOfWork.TransactionRepository
-	transactions := *transactionRepository.GetBuyAndSellTransactions(uuid.MustParse("58ade236-bdec-444b-a98e-653f8a4eabc3"))
+	transactions := *transactionRepository.GetBuyAndSellTransactions(uuid.MustParse(portfolioId))
 	if len(transactions) == 0 {
 		return
 	}
@@ -28,7 +30,7 @@ func HoldingsHandler(server *server.Webserver, ctx *fasthttp.RequestCtx) {
 	firstTransaction := transactions[0]
 	start := helpers.TruncateToDay(firstTransaction.TransactedAt)
 	end := helpers.TruncateToDay(time.Now())
-	uniqueSymbols := transactionRepository.GetUniqueSymbolsForPortfolio(uuid.MustParse("58ade236-bdec-444b-a98e-653f8a4eabc3"))
+	uniqueSymbols := transactionRepository.GetUniqueSymbolsForPortfolio(uuid.MustParse(portfolioId))
 	historicalDataPerSymbol := server.UnitOfWork.HistoricalDataRepository.GetBySymbols(uniqueSymbols)
 
 	holdings := helpers.ThreadSafeMap[time.Time, helpers.ThreadSafeMap[string, holding]]{
@@ -104,16 +106,5 @@ func HoldingsHandler(server *server.Webserver, ctx *fasthttp.RequestCtx) {
 		resp = append(resp, []float64{float64(d.UnixMilli()), math.Round(dayPrice*100) / 100})
 	}
 
-	marshal, err := json.Marshal(resp)
-	if err != nil {
-		fmt.Println(err)
-		return
-	}
-	ctx.SetBody(marshal)
-	ctx.SetContentType("application/json")
-	ctx.Response.Header.Set("Access-Control-Allow-Origin", "*")
-	if err != nil {
-		fmt.Println(err)
-		return
-	}
+	ctx.JSON(http.StatusOK, resp)
 }

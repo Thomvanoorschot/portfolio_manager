@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"github.com/Thomvanoorschot/portfolioManager/app/data/entities"
 	"github.com/Thomvanoorschot/portfolioManager/app/server"
-	"github.com/valyala/fasthttp"
+	"github.com/gin-gonic/gin"
 	"gitlab.com/metakeule/fmtdate"
 	"io"
 	"log"
@@ -14,7 +14,7 @@ import (
 	"time"
 )
 
-func HistoricalDataImportHandler(server *server.Webserver, ctx *fasthttp.RequestCtx) {
+func HistoricalDataImportHandler(server *server.Webserver, _ *gin.Context) {
 	symbols := server.UnitOfWork.TransactionRepository.GetUniqueSymbols()
 	for _, symbol := range symbols {
 		url := fmt.Sprintf("https://query1.finance.yahoo.com/v7/finance/download/%s?period1=%d&period2=%d&interval=1d&events=history&includeAdjustedClose=true",

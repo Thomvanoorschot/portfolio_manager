@@ -1,18 +1,19 @@
 package handlers
 
 import (
-	"encoding/json"
-	"fmt"
 	"github.com/Rhymond/go-money"
 	"github.com/Thomvanoorschot/portfolioManager/app/helpers"
 	"github.com/Thomvanoorschot/portfolioManager/app/server"
+	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
-	"github.com/valyala/fasthttp"
+	"net/http"
 	"time"
 )
 
-func CashDepositsHandler(server *server.Webserver, ctx *fasthttp.RequestCtx) {
-	transactions := *server.UnitOfWork.TransactionRepository.GetDepositAndWithdrawalTransactions(uuid.MustParse("58ade236-bdec-444b-a98e-653f8a4eabc3"))
+func CashDepositsHandler(server *server.Webserver, ctx *gin.Context) {
+	portfolioId := ctx.Param("portfolioId")
+
+	transactions := *server.UnitOfWork.TransactionRepository.GetDepositAndWithdrawalTransactions(uuid.MustParse(portfolioId))
 	if len(transactions) == 0 {
 		return
 	}
@@ -31,16 +32,5 @@ func CashDepositsHandler(server *server.Webserver, ctx *fasthttp.RequestCtx) {
 		}
 		resp = append(resp, []float64{float64(d.UnixMilli()), money.New(cumulativePriceInCentsPerDay, firstTransaction.CurrencyCode).AsMajorUnits()})
 	}
-	marshal, err := json.Marshal(resp)
-	if err != nil {
-		fmt.Println(err)
-		return
-	}
-	ctx.SetBody(marshal)
-	ctx.SetContentType("application/json")
-	ctx.Response.Header.Set("Access-Control-Allow-Origin", "*")
-	if err != nil {
-		fmt.Println(err)
-		return
-	}
+	ctx.JSON(http.StatusOK, resp)
 }

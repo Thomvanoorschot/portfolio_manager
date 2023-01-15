@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"github.com/Thomvanoorschot/portfolioManager/app/data/entities"
 	"github.com/Thomvanoorschot/portfolioManager/app/server"
-	"github.com/valyala/fasthttp"
+	"github.com/gin-gonic/gin"
 	"io"
 	"log"
 	"regexp"
@@ -22,7 +22,7 @@ type Commission struct {
 }
 type Commissions []*Commission
 
-func DegiroImportHandler(server *server.Webserver, ctx *fasthttp.RequestCtx) {
+func DegiroImportHandler(server *server.Webserver, ctx *gin.Context) {
 	fileHeader, _ := ctx.FormFile("file")
 	file, _ := fileHeader.Open()
 	reader := csv.NewReader(file)
@@ -50,7 +50,6 @@ func DegiroImportHandler(server *server.Webserver, ctx *fasthttp.RequestCtx) {
 		Transactions: convertedTransactions,
 		EntityBase:   entities.EntityBase{},
 	})
-
 }
 
 func setCommissions(transactions *entities.Transactions, commissions *Commissions) {

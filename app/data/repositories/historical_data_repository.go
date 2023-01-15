@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"github.com/Thomvanoorschot/portfolioManager/app/data/entities"
+	"github.com/Thomvanoorschot/portfolioManager/app/helpers"
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/mongo"
 	"go.mongodb.org/mongo-driver/mongo/options"
@@ -30,6 +31,24 @@ func (p *HistoricalDataRepository) GetBySymbols(symbols []string) map[string][]e
 		m[d.Symbol] = d.Entries
 	}
 	return m
+}
+
+func (p *HistoricalDataRepository) GetLastBySymbol(symbols []string) *helpers.ThreadSafeMap[string, entities.HistoricalDataEntry] {
+	var historicalData []entities.HistoricalData
+	filter := bson.M{"_id": bson.M{"$in": symbols}}
+
+	find, _ := p.Collection.Find(context.TODO(), filter)
+	_ = find.All(context.TODO(), &historicalData)
+
+	m := helpers.ThreadSafeMap[string, entities.HistoricalDataEntry]{}
+	m.Entries = map[string]*entities.HistoricalDataEntry{}
+	for _, d := range historicalData {
+		if d.Entries == nil {
+			continue
+		}
+		m.Entries[d.Symbol] = &d.Entries[len(d.Entries)-1]
+	}
+	return &m
 }
 func (p *HistoricalDataRepository) GetBySymbol(symbol string) *entities.HistoricalData {
 	var historicalData entities.HistoricalData
