@@ -119,6 +119,7 @@ func PerDayHandler(server *server.Webserver, ctx *gin.Context) {
 		allocations.Entries = append(allocations.Entries, entities.Allocation{
 			Symbol:     symbol,
 			Percentage: h.total / amountSum * 100,
+			Total:      h.total,
 		})
 	}
 	server.UnitOfWork.AllocationRepository.Upsert(portfolioId, allocations)

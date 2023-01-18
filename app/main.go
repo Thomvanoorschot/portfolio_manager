@@ -1,8 +1,8 @@
 package main
 
 import (
+	"github.com/Thomvanoorschot/portfolioManager/app/routes"
 	"github.com/Thomvanoorschot/portfolioManager/app/server"
-	"github.com/Thomvanoorschot/portfolioManager/routes"
 	"log"
 )
 
