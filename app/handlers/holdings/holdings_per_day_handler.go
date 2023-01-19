@@ -19,6 +19,18 @@ type holding struct {
 	total                  float64
 }
 
+type readOp struct {
+	date   time.Time
+	symbol string
+	resp   chan *holding
+}
+type writeOp struct {
+	date   time.Time
+	symbol string
+	val    *holding
+	resp   chan bool
+}
+
 func PerDayHandler(server *server.Webserver, ctx *gin.Context) {
 	portfolioId := ctx.Param("portfolioId")
 
@@ -34,13 +46,24 @@ func PerDayHandler(server *server.Webserver, ctx *gin.Context) {
 	uniqueSymbols := transactionRepository.GetUniqueSymbolsForPortfolio(uuid.MustParse(portfolioId))
 	historicalDataPerSymbol := server.UnitOfWork.HistoricalDataRepository.GetBySymbols(uniqueSymbols)
 
-	holdings := helpers.ThreadSafeMap[time.Time, helpers.ThreadSafeMap[string, holding]]{
-		Entries: map[time.Time]*helpers.ThreadSafeMap[string, holding]{},
-	}
-	holdings.Entries[start] = &helpers.ThreadSafeMap[string, holding]{
-		RWMutex: sync.RWMutex{},
-		Entries: map[string]*holding{},
-	}
+	holdings := map[time.Time]map[string]*holding{}
+	reads := make(chan readOp)
+	writes := make(chan writeOp)
+	go func(h map[time.Time]map[string]*holding) {
+		var state = h
+		for {
+			select {
+			case read := <-reads:
+				read.resp <- state[read.date][read.symbol]
+			case write := <-writes:
+				if state[write.date] == nil {
+					state[write.date] = map[string]*holding{}
+				}
+				state[write.date][write.symbol] = write.val
+				write.resp <- true
+			}
+		}
+	}(holdings)
 	var resp [][]float64
 	for d := start; d.After(end) == false; d = d.AddDate(0, 0, 1) {
 		for _, transaction := range transactions {
@@ -48,24 +71,24 @@ func PerDayHandler(server *server.Webserver, ctx *gin.Context) {
 			if !truncatedTransactedAt.Equal(d) {
 				continue
 			}
-			thisDaysHoldings := holdings.Entries[truncatedTransactedAt]
-			thisDaysSymbolHoldings := thisDaysHoldings.Entries[transaction.Symbol]
+			if holdings[truncatedTransactedAt] == nil {
+				holdings[truncatedTransactedAt] = map[string]*holding{}
+			}
+			thisDaysHoldings := holdings[truncatedTransactedAt]
+			thisDaysSymbolHoldings := thisDaysHoldings[transaction.Symbol]
 			if thisDaysSymbolHoldings == nil {
 				newHolding := &holding{}
-				thisDaysHoldings.Entries[transaction.Symbol] = newHolding
+				thisDaysHoldings[transaction.Symbol] = newHolding
 				thisDaysSymbolHoldings = newHolding
 			}
 			thisDaysSymbolHoldings.amount += transaction.Amount
 		}
 
 		var dayPrice float64
-		newSafeHoldings := &helpers.ThreadSafeMap[string, holding]{
-			RWMutex: sync.RWMutex{},
-			Entries: map[string]*holding{},
-		}
 		wg := sync.WaitGroup{}
-		currentHoldings := holdings.Entries[d].Entries
+		currentHoldings := holdings[d]
 		c := make(chan float64, len(currentHoldings))
+
 		for symbol, h := range currentHoldings {
 			wg.Add(1)
 			go func(symbol string, h *holding, c chan float64) {
@@ -78,8 +101,13 @@ func PerDayHandler(server *server.Webserver, ctx *gin.Context) {
 					}
 				}
 				if symbolPriceAtGivenTime == 0 {
-					previousDaysHolding := holdings.Get(d.AddDate(0, 0, -1))
-					s := previousDaysHolding.Get(symbol)
+					read := readOp{
+						date:   d.AddDate(0, 0, -1),
+						symbol: symbol,
+						resp:   make(chan *holding),
+					}
+					reads <- read
+					s := <-read.resp
 					if s != nil {
 						symbolPriceAtGivenTime = s.symbolPriceAtGivenTime
 					} else {
@@ -90,11 +118,18 @@ func PerDayHandler(server *server.Webserver, ctx *gin.Context) {
 				h.symbolPriceAtGivenTime = symbolPriceAtGivenTime
 				h.total = symbolPriceAtGivenTime * h.amount
 				c <- h.total
-				newSafeHoldings.Add(symbol, &holding{
-					amount:                 h.amount,
-					symbolPriceAtGivenTime: h.symbolPriceAtGivenTime,
-					total:                  h.total,
-				})
+				write := writeOp{
+					date:   d.AddDate(0, 0, 1),
+					symbol: symbol,
+					val: &holding{
+						amount:                 h.amount,
+						symbolPriceAtGivenTime: h.symbolPriceAtGivenTime,
+						total:                  h.total,
+					},
+					resp: make(chan bool),
+				}
+				writes <- write
+				<-write.resp
 			}(symbol, h, c)
 		}
 		wg.Wait()
@@ -102,17 +137,16 @@ func PerDayHandler(server *server.Webserver, ctx *gin.Context) {
 		for elem := range c {
 			dayPrice += elem
 		}
-		holdings.Entries[d.AddDate(0, 0, 1)] = newSafeHoldings
 
 		resp = append(resp, []float64{float64(d.UnixMilli()), math.Round(dayPrice*100) / 100})
 	}
 	allocations := entities.Allocations{}
 
 	var amountSum float64
-	for _, h := range holdings.Entries[end].Entries {
+	for _, h := range holdings[end] {
 		amountSum += h.total
 	}
-	for symbol, h := range holdings.Entries[end].Entries {
+	for symbol, h := range holdings[end] {
 		if h.amount == 0 {
 			continue
 		}
