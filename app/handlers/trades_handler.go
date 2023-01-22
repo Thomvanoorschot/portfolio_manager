@@ -44,11 +44,11 @@ func TradesHandler(server *server.Webserver, ctx *gin.Context) {
 			lineColor = "#EC1E1E"
 		}
 
-		historicalData := historicalDataPerSymbol.Entries[transaction.Symbol]
+		historicalData := historicalDataPerSymbol[transaction.Symbol]
 		if historicalData == nil {
 			continue
 		}
-		gainOrLoss := 100 * (historicalDataPerSymbol.Entries[transaction.Symbol].AdjustedClose*100 - float64(transaction.PriceInCents)) / float64(transaction.PriceInCents)
+		gainOrLoss := 100 * (historicalDataPerSymbol[transaction.Symbol].AdjustedClose*100 - float64(transaction.PriceInCents)) / float64(transaction.PriceInCents)
 		flags = append(flags, &Flag{
 			X:         truncatedTransactedAt.UnixMilli(),
 			Title:     transactionTitle,
