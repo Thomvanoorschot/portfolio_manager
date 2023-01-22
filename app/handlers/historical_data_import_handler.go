@@ -34,7 +34,8 @@ func HistoricalDataImportHandler(server *server.Webserver, _ *gin.Context) {
 		firstLineProcessed := false
 
 		historicalData := entities.HistoricalData{
-			Symbol: symbol,
+			Symbol:  symbol,
+			Entries: map[time.Time]*entities.HistoricalDataEntry{},
 		}
 
 		for {
@@ -47,14 +48,15 @@ func HistoricalDataImportHandler(server *server.Webserver, _ *gin.Context) {
 				firstLineProcessed = true
 				continue
 			}
-			convertLine(line, &historicalData.Entries)
+			convertLine(line, historicalData.Entries)
 		}
 		server.UnitOfWork.HistoricalDataRepository.Insert(&historicalData)
 	}
 }
 
-func convertLine(line []string, historicalDataList *[]entities.HistoricalDataEntry) {
+func convertLine(line []string, historicalDataList map[time.Time]*entities.HistoricalDataEntry) {
 	timestamp, _ := fmtdate.Parse("YYYY-MM-DD", line[0])
+	timestamp = timestamp.UTC()
 	historicalData := entities.HistoricalDataEntry{}
 	historicalData.Timestamp = timestamp
 	open, _ := strconv.ParseFloat(line[1], 64)
@@ -69,5 +71,5 @@ func convertLine(line []string, historicalDataList *[]entities.HistoricalDataEnt
 	historicalData.AdjustedClose = adjustedClose
 	volume, _ := strconv.Atoi(line[6])
 	historicalData.Volume = volume
-	*historicalDataList = append(*historicalDataList, historicalData)
+	historicalDataList[timestamp] = &historicalData
 }

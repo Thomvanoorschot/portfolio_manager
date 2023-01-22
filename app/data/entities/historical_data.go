@@ -5,8 +5,8 @@ import (
 )
 
 type HistoricalData struct {
-	Symbol  string                `bson:"_id,omitempty"`
-	Entries []HistoricalDataEntry `bson:"entries,omitempty"`
+	Symbol  string                             `bson:"_id,omitempty"`
+	Entries map[time.Time]*HistoricalDataEntry `bson:"entries,omitempty"`
 }
 
 type HistoricalDataEntry struct {

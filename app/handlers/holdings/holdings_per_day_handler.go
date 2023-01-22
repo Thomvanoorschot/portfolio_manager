@@ -14,9 +14,9 @@ import (
 )
 
 type holding struct {
-	amount                 float64
-	symbolPriceAtGivenTime float64
-	total                  float64
+	amount                        float64
+	priceOfSymbolPriceAtGivenTime float64
+	total                         float64
 }
 
 type readOp struct {
@@ -93,14 +93,19 @@ func PerDayHandler(server *server.Webserver, ctx *gin.Context) {
 			wg.Add(1)
 			go func(symbol string, h *holding, c chan float64) {
 				defer wg.Done()
-				var symbolPriceAtGivenTime float64
-				for _, historicalData := range historicalDataPerSymbol[symbol] {
-					if historicalData.Timestamp.Year() == d.Year() && historicalData.Timestamp.Month() == d.Month() && historicalData.Timestamp.Day() == d.Day() {
-						symbolPriceAtGivenTime = historicalData.Close
-						break
-					}
+				//var priceOfSymbolPriceAtGivenTime float64
+				//for _, historicalData := range historicalDataPerSymbol[symbol] {
+				//	if historicalData.Timestamp.Year() == d.Year() && historicalData.Timestamp.Month() == d.Month() && historicalData.Timestamp.Day() == d.Day() {
+				//		priceOfSymbolPriceAtGivenTime = historicalData.Close
+				//		break
+				//	}
+				//}
+				symbolPriceAtGivenTime := historicalDataPerSymbol[symbol][d]
+				var priceOfSymbolPriceAtGivenTime float64
+				if symbolPriceAtGivenTime != nil {
+					priceOfSymbolPriceAtGivenTime = symbolPriceAtGivenTime.AdjustedClose
 				}
-				if symbolPriceAtGivenTime == 0 {
+				if priceOfSymbolPriceAtGivenTime == 0 {
 					read := readOp{
 						date:   d.AddDate(0, 0, -1),
 						symbol: symbol,
@@ -109,22 +114,22 @@ func PerDayHandler(server *server.Webserver, ctx *gin.Context) {
 					reads <- read
 					s := <-read.resp
 					if s != nil {
-						symbolPriceAtGivenTime = s.symbolPriceAtGivenTime
+						priceOfSymbolPriceAtGivenTime = s.priceOfSymbolPriceAtGivenTime
 					} else {
 						fmt.Println("Could not find price")
 					}
 					// TODO Deal with symbol changes not having historical data
 				}
-				h.symbolPriceAtGivenTime = symbolPriceAtGivenTime
-				h.total = symbolPriceAtGivenTime * h.amount
+				h.priceOfSymbolPriceAtGivenTime = priceOfSymbolPriceAtGivenTime
+				h.total = priceOfSymbolPriceAtGivenTime * h.amount
 				c <- h.total
 				write := writeOp{
 					date:   d.AddDate(0, 0, 1),
 					symbol: symbol,
 					val: &holding{
-						amount:                 h.amount,
-						symbolPriceAtGivenTime: h.symbolPriceAtGivenTime,
-						total:                  h.total,
+						amount:                        h.amount,
+						priceOfSymbolPriceAtGivenTime: h.priceOfSymbolPriceAtGivenTime,
+						total:                         h.total,
 					},
 					resp: make(chan bool),
 				}

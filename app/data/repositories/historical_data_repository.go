@@ -8,6 +8,7 @@ import (
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/mongo"
 	"go.mongodb.org/mongo-driver/mongo/options"
+	"time"
 )
 
 type HistoricalDataRepository struct {
@@ -19,14 +20,14 @@ func ProvideHistoricalDataRepository(database *mongo.Database) *HistoricalDataRe
 	return &HistoricalDataRepository{Collection: historicalDataCollection}
 }
 
-func (p *HistoricalDataRepository) GetBySymbols(symbols []string) map[string][]entities.HistoricalDataEntry {
+func (p *HistoricalDataRepository) GetBySymbols(symbols []string) map[string]map[time.Time]*entities.HistoricalDataEntry {
 	var historicalData []entities.HistoricalData
 	filter := bson.M{"_id": bson.M{"$in": symbols}}
 
 	find, _ := p.Collection.Find(context.TODO(), filter)
 	_ = find.All(context.TODO(), &historicalData)
 
-	m := make(map[string][]entities.HistoricalDataEntry)
+	m := make(map[string]map[time.Time]*entities.HistoricalDataEntry)
 	for _, d := range historicalData {
 		m[d.Symbol] = d.Entries
 	}
@@ -46,7 +47,13 @@ func (p *HistoricalDataRepository) GetLastBySymbol(symbols []string) *helpers.Th
 		if d.Entries == nil {
 			continue
 		}
-		m.Entries[d.Symbol] = &d.Entries[len(d.Entries)-1]
+		for i := 0; i < 30; i++ {
+			last := d.Entries[helpers.TruncateToDay(time.Now().AddDate(0, 0, -i))]
+			if last != nil {
+				m.Entries[d.Symbol] = last
+				break
+			}
+		}
 	}
 	return &m
 }
