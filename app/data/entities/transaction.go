@@ -40,6 +40,7 @@ type Transaction struct {
 	ExternalId        string
 	PortfolioID       uuid.UUID
 	Symbol            string
+	UniqueHash        string
 	EntityBase
 }
 

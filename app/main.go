@@ -8,6 +8,6 @@ import (
 
 func main() {
 	webServer := server.Create()
-	routes.SetupRoutes(webServer)
+	routes.SetupRouter(webServer)
 	log.Fatal(webServer.RunTLS("127.0.0.1:8000", "localhost.crt", "localhost.key"))
 }

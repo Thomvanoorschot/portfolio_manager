@@ -1,4 +1,4 @@
-package holdings
+package graph_data_handlers
 
 import (
 	"fmt"
@@ -35,7 +35,7 @@ func PerDayHandler(server *server.Webserver, ctx *gin.Context) {
 	portfolioId := ctx.Param("portfolioId")
 
 	transactionRepository := server.UnitOfWork.TransactionRepository
-	transactions := *transactionRepository.GetBuyAndSellTransactions(uuid.MustParse(portfolioId))
+	transactions := transactionRepository.GetBuyAndSellTransactions(uuid.MustParse(portfolioId))
 	if len(transactions) == 0 {
 		return
 	}

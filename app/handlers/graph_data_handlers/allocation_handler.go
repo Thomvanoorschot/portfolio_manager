@@ -1,4 +1,4 @@
-package holdings
+package graph_data_handlers
 
 import (
 	"github.com/Thomvanoorschot/portfolioManager/app/server"

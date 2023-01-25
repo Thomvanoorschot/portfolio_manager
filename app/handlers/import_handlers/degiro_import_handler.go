@@ -1,20 +1,32 @@
-package handlers
+package import_handlers
 
 import (
+	"bytes"
+	"crypto/sha256"
 	"encoding/csv"
+	"encoding/hex"
+	"encoding/json"
 	"fmt"
 	"github.com/Thomvanoorschot/portfolioManager/app/data/entities"
 	"github.com/Thomvanoorschot/portfolioManager/app/server"
 	"github.com/gin-gonic/gin"
+	"github.com/google/uuid"
 	"io"
 	"log"
+	"net/http"
 	"regexp"
 	"strconv"
 	"strings"
 	"time"
 )
 
-const BuyOrSellRegex = "(Koop|Verkoop)\\s(\\d*)\\s@\\s(\\d*,?\\d*)\\s[A-Z]*"
+const (
+	BuyOrSellRegex = "(Koop|Verkoop)\\s(\\d*)\\s@\\s(\\d*,?\\d*)\\s[A-Z]*"
+)
+
+var (
+	SymbolMap = map[string]string{}
+)
 
 type Commission struct {
 	AmountInCents int64
@@ -22,15 +34,26 @@ type Commission struct {
 }
 type Commissions []*Commission
 
+type YahooSearch struct {
+	Quotes []struct {
+		Symbol string `json:"symbol"`
+	} `json:"quotes"`
+}
+
 func DegiroImportHandler(server *server.Webserver, ctx *gin.Context) {
 	fileHeader, _ := ctx.FormFile("file")
+	portfolioId := ctx.Request.Form.Get("portfolioId")
 	file, _ := fileHeader.Open()
 	reader := csv.NewReader(file)
 	firstLineProcessed := false
 
 	var convertedTransactions entities.Transactions
 	var commissions Commissions
-
+	portfolioUuid := uuid.MustParse(portfolioId)
+	var previouslyConvertedTransactions entities.Transactions
+	if portfolioId != "" {
+		previouslyConvertedTransactions = server.UnitOfWork.TransactionRepository.GetByPortfolioId(portfolioUuid)
+	}
 	for {
 		line, readError := reader.Read()
 		if readError == io.EOF {
@@ -41,15 +64,21 @@ func DegiroImportHandler(server *server.Webserver, ctx *gin.Context) {
 			firstLineProcessed = true
 			continue
 		}
-		convertTransaction(line, &convertedTransactions, &commissions)
+		convertTransaction(line, &convertedTransactions, &commissions, previouslyConvertedTransactions, portfolioUuid)
+	}
+	if len(convertedTransactions) == 0 {
+		return
 	}
 	setCommissions(&convertedTransactions, &commissions)
-	fmt.Println(len(convertedTransactions))
-	server.UnitOfWork.PortfolioRepository.Create(&entities.Portfolio{
-		Title:        "Main portfolio",
-		Transactions: convertedTransactions,
-		EntityBase:   entities.EntityBase{},
-	})
+	if portfolioId == "" {
+		server.UnitOfWork.PortfolioRepository.Create(&entities.Portfolio{
+			Title:        "Main portfolio",
+			Transactions: convertedTransactions,
+			EntityBase:   entities.EntityBase{},
+		})
+	} else {
+		server.UnitOfWork.TransactionRepository.AddToPortfolio(convertedTransactions)
+	}
 }
 
 func setCommissions(transactions *entities.Transactions, commissions *Commissions) {
@@ -62,10 +91,21 @@ func setCommissions(transactions *entities.Transactions, commissions *Commission
 	}
 }
 
-func convertTransaction(line []string, transactions *entities.Transactions, commissions *Commissions) {
+func convertTransaction(line []string, transactions *entities.Transactions,
+	commissions *Commissions,
+	previouslyConvertedTransactions entities.Transactions,
+	portfolioId uuid.UUID) {
+
+	uniqueHash := computeHashForList(line)
+	for _, previousConvertedTransaction := range previouslyConvertedTransactions {
+		if uniqueHash == previousConvertedTransaction.UniqueHash {
+			return
+		}
+	}
+
 	isBuyOrSellTransaction, _ := regexp.MatchString(BuyOrSellRegex, line[5])
 	if isBuyOrSellTransaction {
-		convertBuyOrSellTransaction(line, transactions)
+		convertBuyOrSellTransaction(line, transactions, portfolioId)
 		return
 	}
 
@@ -77,13 +117,13 @@ func convertTransaction(line []string, transactions *entities.Transactions, comm
 
 	isDeposit := line[5] == "Reservation iDEAL / Sofort Deposit" || line[5] == "iDEAL storting"
 	if isDeposit {
-		convertDeposit(line, transactions)
+		convertDeposit(line, transactions, portfolioId)
 		return
 	}
 
 	isWithdrawal := line[5] == "Processed Flatex Withdrawal"
 	if isWithdrawal {
-		convertWithdrawal(line, transactions)
+		convertWithdrawal(line, transactions, portfolioId)
 		return
 	}
 }
@@ -99,9 +139,11 @@ func convertCommission(line []string, commissions *Commissions) {
 	*commissions = append(*commissions, commission)
 }
 
-func convertDeposit(line []string, transactions *entities.Transactions) {
+func convertDeposit(line []string,
+	transactions *entities.Transactions,
+	portfolioId uuid.UUID) {
 	transaction := &entities.Transaction{}
-	convertGeneralTransactionInfo(line, transaction)
+	convertGeneralTransactionInfo(line, transaction, portfolioId)
 	cost, _ := strconv.ParseFloat(line[8], 64)
 	if cost < 0 {
 		return
@@ -112,9 +154,11 @@ func convertDeposit(line []string, transactions *entities.Transactions) {
 	transaction.TransactionType = entities.Deposit
 	*transactions = append(*transactions, transaction)
 }
-func convertWithdrawal(line []string, transactions *entities.Transactions) {
+func convertWithdrawal(line []string,
+	transactions *entities.Transactions,
+	portfolioId uuid.UUID) {
 	transaction := &entities.Transaction{}
-	convertGeneralTransactionInfo(line, transaction)
+	convertGeneralTransactionInfo(line, transaction, portfolioId)
 	cost, _ := strconv.ParseFloat(line[8], 64)
 	if cost < 0 {
 		return
@@ -126,9 +170,11 @@ func convertWithdrawal(line []string, transactions *entities.Transactions) {
 	*transactions = append(*transactions, transaction)
 }
 
-func convertBuyOrSellTransaction(line []string, transactions *entities.Transactions) {
+func convertBuyOrSellTransaction(line []string,
+	transactions *entities.Transactions,
+	portfolioId uuid.UUID) {
 	transaction := &entities.Transaction{}
-	convertGeneralTransactionInfo(line, transaction)
+	convertGeneralTransactionInfo(line, transaction, portfolioId)
 	r, _ := regexp.Compile(BuyOrSellRegex)
 	parsedDescription := r.FindStringSubmatch(line[5])
 
@@ -142,10 +188,13 @@ func convertBuyOrSellTransaction(line []string, transactions *entities.Transacti
 	transaction.Amount = amount
 	transaction.PriceInCents = int64(pricePerUnit * 100)
 	transaction.TransactionType = transactionType
-
+	transaction.Symbol = getSymbol(transaction.ISIN)
 	*transactions = append(*transactions, transaction)
 }
-func convertGeneralTransactionInfo(line []string, transaction *entities.Transaction) {
+func convertGeneralTransactionInfo(line []string,
+	transaction *entities.Transaction,
+	portfolioId uuid.UUID) {
+	uniqueHash := computeHashForList(line)
 	transactedDate := strings.Split(line[0], "-")
 	transactedTime := strings.Split(line[1], ":")
 	transactedYear, _ := strconv.Atoi(transactedDate[2])
@@ -163,4 +212,43 @@ func convertGeneralTransactionInfo(line []string, transaction *entities.Transact
 	transaction.Description = line[5]
 	transaction.ExternalId = line[11]
 	transaction.CurrencyCode = line[9]
+	transaction.UniqueHash = uniqueHash
+	transaction.PortfolioID = portfolioId
+}
+
+func getSymbol(searchTerm string) string {
+	symbol, found := SymbolMap[searchTerm]
+	if found {
+		return symbol
+	}
+	url := fmt.Sprintf("https://query2.finance.yahoo.com/v1/finance/search?q=%s&lang=en-US&region=US&quotesCount=1&newsCount=0&listsCount=0&enableFuzzyQuery=false&quotesQueryId=tss_match_phrase_query&multiQuoteQueryId=multi_quote_single_token_query&newsQueryId=news_cie_vespa&enableCb=true&enableNavLinks=false&enableEnhancedTrivialQuery=false&enableResearchReports=false&enableCulturalAssets=false&enableLogoUrl=false&researchReportsCount=0", searchTerm)
+	r, err := http.Get(url)
+	if err != nil {
+		return ""
+	}
+	defer func(Body io.ReadCloser) {
+		err := Body.Close()
+		if err != nil {
+
+		}
+	}(r.Body)
+	searchResult := &YahooSearch{}
+	_ = json.NewDecoder(r.Body).Decode(searchResult)
+
+	if len(searchResult.Quotes) == 0 {
+		return ""
+	}
+	SymbolMap[searchTerm] = searchResult.Quotes[0].Symbol
+	return searchResult.Quotes[0].Symbol
+}
+
+func computeHashForList(list []string) string {
+	var buffer bytes.Buffer
+	for i := range list {
+		buffer.WriteString(list[i])
+		buffer.WriteString("0")
+	}
+	b := sha256.Sum256([]byte(buffer.String()))
+	s := hex.EncodeToString(b[:])
+	return s
 }

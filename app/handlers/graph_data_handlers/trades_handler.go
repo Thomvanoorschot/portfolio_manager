@@ -1,4 +1,4 @@
-package handlers
+package graph_data_handlers
 
 import (
 	"fmt"
@@ -21,7 +21,7 @@ type Flag struct {
 func TradesHandler(server *server.Webserver, ctx *gin.Context) {
 	portfolioId := ctx.Param("portfolioId")
 	transactionRepository := server.UnitOfWork.TransactionRepository
-	transactions := *transactionRepository.GetBuyAndSellTransactions(uuid.MustParse(portfolioId))
+	transactions := transactionRepository.GetBuyAndSellTransactions(uuid.MustParse(portfolioId))
 	if len(transactions) == 0 {
 		return
 	}

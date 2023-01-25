@@ -1,4 +1,4 @@
-package handlers
+package graph_data_handlers
 
 import (
 	"github.com/Rhymond/go-money"
@@ -13,7 +13,7 @@ import (
 func CashDepositsHandler(server *server.Webserver, ctx *gin.Context) {
 	portfolioId := ctx.Param("portfolioId")
 
-	transactions := *server.UnitOfWork.TransactionRepository.GetDepositAndWithdrawalTransactions(uuid.MustParse(portfolioId))
+	transactions := server.UnitOfWork.TransactionRepository.GetDepositAndWithdrawalTransactions(uuid.MustParse(portfolioId))
 	if len(transactions) == 0 {
 		return
 	}
