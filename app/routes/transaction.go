@@ -9,8 +9,14 @@ import (
 func GetTransactionRoutes(routerGroup *gin.RouterGroup, server *server.Webserver) *gin.RouterGroup {
 	r := routerGroup.Group("/transaction")
 	{
-		r.POST("/update-symbols", func(ctx *gin.Context) {
-			transaction_handlers.UpdateTransactionSymbolsHandler(server, ctx)
+		r.GET("/:portfolioId", func(ctx *gin.Context) {
+			transaction_handlers.GetByPortfolioId(server, ctx)
+		})
+		r.PUT("/update", func(ctx *gin.Context) {
+			transaction_handlers.Update(server, ctx)
+		})
+		r.PUT("/update-symbols", func(ctx *gin.Context) {
+			transaction_handlers.UpdateTransactionSymbols(server, ctx)
 		})
 	}
 	return r

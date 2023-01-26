@@ -2,6 +2,7 @@ package repositories
 
 import (
 	"github.com/Thomvanoorschot/portfolioManager/app/data/entities"
+	"github.com/Thomvanoorschot/portfolioManager/app/enums"
 	"github.com/google/uuid"
 	"gorm.io/gorm"
 )
@@ -20,13 +21,13 @@ func (p *TransactionRepository) Create(transaction *entities.Transaction) {
 
 func (p *TransactionRepository) GetDepositAndWithdrawalTransactions(id uuid.UUID) entities.Transactions {
 	transactions := entities.Transactions{}
-	p.DB.Where("transaction_type IN ? AND portfolio_id = ?", []entities.TransactionType{entities.Withdrawal, entities.Deposit}, id).Order("transacted_at asc").Find(&transactions)
+	p.DB.Where("transaction_type IN ? AND portfolio_id = ?", []enums.TransactionType{enums.Withdrawal, enums.Deposit}, id).Order("transacted_at asc").Find(&transactions)
 	return transactions
 }
 
 func (p *TransactionRepository) GetBuyAndSellTransactions(id uuid.UUID) entities.Transactions {
 	transactions := entities.Transactions{}
-	p.DB.Where("transaction_type IN ? AND portfolio_id = ?", []entities.TransactionType{entities.Buy, entities.Sell}, id).Order("transacted_at asc").Find(&transactions)
+	p.DB.Where("transaction_type IN ? AND portfolio_id = ?", []enums.TransactionType{enums.Buy, enums.Sell}, id).Order("transacted_at asc").Find(&transactions)
 	return transactions
 }
 func (p *TransactionRepository) GetByPortfolioId(id uuid.UUID) entities.Transactions {
@@ -51,3 +52,21 @@ func (p *TransactionRepository) AddToPortfolio(transactions entities.Transaction
 func (p *TransactionRepository) UpdateSymbols(portfolioId string, oldSymbol string, newSymbol string) {
 	p.DB.Model(&entities.Transaction{}).Where("portfolio_id = ? AND symbol = ?", portfolioId, oldSymbol).Update("symbol", newSymbol)
 }
+func (p *TransactionRepository) Update(transaction *entities.Transaction) {
+	p.DB.Model(&entities.Transaction{}).Where("id = ?", transaction.ID).Select("transacted_at",
+		"currency_code",
+		"transaction_type",
+		"amount",
+		"price_in_cents",
+		"commission_in_cents",
+		"symbol").Updates(transaction)
+}
+
+//
+//TransactedAt:      requestBody.TransactedAt,
+//CurrencyCode:      requestBody.Currency,
+//TransactionType:   requestBody.TransactionType,
+//Amount:            requestBody.Amount,
+//PriceInCents:      requestBody.PriceInCents,
+//CommissionInCents: requestBody.CommissionInCents,
+//Symbol:            requestBody.Symbol,

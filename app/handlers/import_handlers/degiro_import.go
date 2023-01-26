@@ -8,6 +8,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"github.com/Thomvanoorschot/portfolioManager/app/data/entities"
+	"github.com/Thomvanoorschot/portfolioManager/app/enums"
 	"github.com/Thomvanoorschot/portfolioManager/app/server"
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
@@ -40,7 +41,7 @@ type YahooSearch struct {
 	} `json:"quotes"`
 }
 
-func DegiroImportHandler(server *server.Webserver, ctx *gin.Context) {
+func DegiroImport(server *server.Webserver, ctx *gin.Context) {
 	fileHeader, _ := ctx.FormFile("file")
 	portfolioId := ctx.Request.Form.Get("portfolioId")
 	file, _ := fileHeader.Open()
@@ -151,7 +152,7 @@ func convertDeposit(line []string,
 	transaction.Product = "CASH"
 	transaction.Amount = 1
 	transaction.PriceInCents = int64(cost * 100)
-	transaction.TransactionType = entities.Deposit
+	transaction.TransactionType = enums.Deposit
 	*transactions = append(*transactions, transaction)
 }
 func convertWithdrawal(line []string,
@@ -166,7 +167,7 @@ func convertWithdrawal(line []string,
 	transaction.Product = "CASH"
 	transaction.Amount = 1
 	transaction.PriceInCents = int64(cost*100) * -1
-	transaction.TransactionType = entities.Withdrawal
+	transaction.TransactionType = enums.Withdrawal
 	*transactions = append(*transactions, transaction)
 }
 
@@ -180,7 +181,7 @@ func convertBuyOrSellTransaction(line []string,
 
 	transactionType, _ := entities.ConvertToTransactionType(parsedDescription[1])
 	amount, _ := strconv.ParseFloat(parsedDescription[2], 64)
-	if transactionType == entities.Sell {
+	if transactionType == enums.Sell {
 		amount = amount * -1
 	}
 	parsedDescription[3] = strings.Replace(parsedDescription[3], ",", ".", -1)
@@ -236,6 +237,7 @@ func getSymbol(searchTerm string) string {
 	_ = json.NewDecoder(r.Body).Decode(searchResult)
 
 	if len(searchResult.Quotes) == 0 {
+		SymbolMap[searchTerm] = ""
 		return ""
 	}
 	SymbolMap[searchTerm] = searchResult.Quotes[0].Symbol

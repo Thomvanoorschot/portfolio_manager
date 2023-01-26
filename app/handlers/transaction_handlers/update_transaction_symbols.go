@@ -12,7 +12,7 @@ type UpdateTransactionSymbolsRequest struct {
 	NewSymbol   string `json:"newSymbol"`
 }
 
-func UpdateTransactionSymbolsHandler(server *server.Webserver, ctx *gin.Context) {
+func UpdateTransactionSymbols(server *server.Webserver, ctx *gin.Context) {
 	requestBody := UpdateTransactionSymbolsRequest{}
 	_ = ctx.BindJSON(&requestBody)
 

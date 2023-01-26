@@ -2,35 +2,27 @@ package entities
 
 import (
 	"errors"
+	"github.com/Thomvanoorschot/portfolioManager/app/enums"
 	"github.com/google/uuid"
 	"time"
 )
 
-type TransactionType int
-
-const (
-	Unknown TransactionType = iota + 1
-	Buy
-	Sell
-	Deposit
-	Withdrawal
-)
-
-func ConvertToTransactionType(transactionType string) (TransactionType, error) {
+func ConvertToTransactionType(transactionType string) (enums.TransactionType, error) {
 	switch transactionType {
 	case "Koop":
-		return Buy, nil
+		return enums.Buy, nil
 	case "Verkoop":
-		return Sell, nil
+		return enums.Sell, nil
 	default:
-		return Unknown, errors.New("could not convert transactionType")
+		return enums.Unknown, errors.New("could not convert transactionType")
 	}
 }
 
 type Transaction struct {
+	EntityBase
 	TransactedAt      time.Time
 	CurrencyCode      string
-	TransactionType   TransactionType
+	TransactionType   enums.TransactionType
 	Product           string
 	ISIN              string
 	Description       string
@@ -41,7 +33,6 @@ type Transaction struct {
 	PortfolioID       uuid.UUID
 	Symbol            string
 	UniqueHash        string
-	EntityBase
 }
 
 type Transactions []*Transaction

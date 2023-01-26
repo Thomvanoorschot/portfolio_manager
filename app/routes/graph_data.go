@@ -10,16 +10,16 @@ func GetGraphDataRoutes(routerGroup *gin.RouterGroup, server *server.Webserver) 
 	r := routerGroup.Group("/graph")
 	{
 		r.GET("/deposits/:portfolioId", func(ctx *gin.Context) {
-			graph_data_handlers.CashDepositsHandler(server, ctx)
+			graph_data_handlers.CashDeposits(server, ctx)
 		})
 		r.GET("/holdings/per-day/:portfolioId", func(ctx *gin.Context) {
-			graph_data_handlers.PerDayHandler(server, ctx)
+			graph_data_handlers.HoldingsPerDay(server, ctx)
 		})
 		r.GET("/holdings/allocation/:portfolioId", func(ctx *gin.Context) {
-			graph_data_handlers.AllocationHandler(server, ctx)
+			graph_data_handlers.PercentageAllocations(server, ctx)
 		})
 		r.GET("/trades/:portfolioId", func(ctx *gin.Context) {
-			graph_data_handlers.TradesHandler(server, ctx)
+			graph_data_handlers.Trades(server, ctx)
 		})
 	}
 	return r

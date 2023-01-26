@@ -2,7 +2,7 @@ package graph_data_handlers
 
 import (
 	"fmt"
-	"github.com/Thomvanoorschot/portfolioManager/app/data/entities"
+	"github.com/Thomvanoorschot/portfolioManager/app/enums"
 	"github.com/Thomvanoorschot/portfolioManager/app/helpers"
 	"github.com/Thomvanoorschot/portfolioManager/app/server"
 	"github.com/gin-gonic/gin"
@@ -18,7 +18,7 @@ type Flag struct {
 	LineColor string `json:"lineColor"`
 }
 
-func TradesHandler(server *server.Webserver, ctx *gin.Context) {
+func Trades(server *server.Webserver, ctx *gin.Context) {
 	portfolioId := ctx.Param("portfolioId")
 	transactionRepository := server.UnitOfWork.TransactionRepository
 	transactions := transactionRepository.GetBuyAndSellTransactions(uuid.MustParse(portfolioId))
@@ -37,7 +37,7 @@ func TradesHandler(server *server.Webserver, ctx *gin.Context) {
 		transactionTitle := "B"
 		filColor := "#1DA363"
 		lineColor := "#15D67A"
-		if transaction.TransactionType == entities.Sell {
+		if transaction.TransactionType == enums.Sell {
 			transactionTypeString = "Sold"
 			transactionTitle = "S"
 			filColor = "#AD3434"

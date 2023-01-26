@@ -11,7 +11,7 @@ type Allocation struct {
 	Y    float64 `json:"y"`
 }
 
-func AllocationHandler(server *server.Webserver, ctx *gin.Context) {
+func PercentageAllocations(server *server.Webserver, ctx *gin.Context) {
 	portfolioId := ctx.Param("portfolioId")
 
 	allocations := server.UnitOfWork.AllocationRepository.GetByPortfolioId(portfolioId)

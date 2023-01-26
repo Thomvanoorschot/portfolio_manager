@@ -31,7 +31,7 @@ type writeOp struct {
 	resp   chan bool
 }
 
-func PerDayHandler(server *server.Webserver, ctx *gin.Context) {
+func HoldingsPerDay(server *server.Webserver, ctx *gin.Context) {
 	portfolioId := ctx.Param("portfolioId")
 
 	transactionRepository := server.UnitOfWork.TransactionRepository
@@ -145,11 +145,13 @@ func PerDayHandler(server *server.Webserver, ctx *gin.Context) {
 
 		resp = append(resp, []float64{float64(d.UnixMilli()), math.Round(dayPrice*100) / 100})
 	}
-	allocations := entities.Allocations{}
 
 	var amountSum float64
 	for _, h := range holdings[end] {
 		amountSum += h.total
+	}
+	allocations := entities.Allocations{
+		Total: amountSum,
 	}
 	for symbol, h := range holdings[end] {
 		if h.amount == 0 {

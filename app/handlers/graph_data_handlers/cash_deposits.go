@@ -10,7 +10,7 @@ import (
 	"time"
 )
 
-func CashDepositsHandler(server *server.Webserver, ctx *gin.Context) {
+func CashDeposits(server *server.Webserver, ctx *gin.Context) {
 	portfolioId := ctx.Param("portfolioId")
 
 	transactions := server.UnitOfWork.TransactionRepository.GetDepositAndWithdrawalTransactions(uuid.MustParse(portfolioId))

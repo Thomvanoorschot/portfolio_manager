@@ -10,10 +10,10 @@ func GetImportRoutes(routerGroup *gin.RouterGroup, server *server.Webserver) *gi
 	r := routerGroup.Group("/import")
 	{
 		r.POST("/degiro", func(ctx *gin.Context) {
-			import_handlers.DegiroImportHandler(server, ctx)
+			import_handlers.DegiroImport(server, ctx)
 		})
 		r.POST("/historical", func(ctx *gin.Context) {
-			import_handlers.HistoricalDataImportHandler(server, ctx)
+			import_handlers.HistoricalDataImport(server, ctx)
 		})
 	}
 	return r
