@@ -1,26 +1,19 @@
 package transaction_handlers
 
 import (
-	"github.com/Thomvanoorschot/portfolioManager/app/data/entities"
+	"github.com/Thomvanoorschot/portfolioManager/app/mappers/transaction_mappers"
+	"github.com/Thomvanoorschot/portfolioManager/app/models/transaction_models"
 	"github.com/Thomvanoorschot/portfolioManager/app/server"
 	"github.com/gin-gonic/gin"
 	"net/http"
 )
 
 func Update(server *server.Webserver, ctx *gin.Context) {
-	requestBody := TransactionModel{}
-	_ = ctx.BindJSON(&requestBody)
+	requestBody := &transaction_models.Model{}
+	_ = ctx.BindJSON(requestBody)
 
+	transaction := transaction_mapper.ToDbModel(requestBody)
 	transactionRepository := server.UnitOfWork.TransactionRepository
-	transactionRepository.Update(&entities.Transaction{
-		EntityBase:        entities.EntityBase{ID: requestBody.Id},
-		TransactedAt:      requestBody.TransactedAt,
-		CurrencyCode:      requestBody.Currency,
-		TransactionType:   requestBody.TransactionType,
-		Amount:            requestBody.Amount,
-		PriceInCents:      requestBody.PriceInCents,
-		CommissionInCents: requestBody.CommissionInCents,
-		Symbol:            requestBody.Symbol,
-	})
+	transactionRepository.Update(transaction)
 	ctx.Status(http.StatusOK)
 }

@@ -37,7 +37,7 @@ func Trades(server *server.Webserver, ctx *gin.Context) {
 		transactionTitle := "B"
 		filColor := "#1DA363"
 		lineColor := "#15D67A"
-		if transaction.TransactionType == enums.Sell {
+		if transaction.TransactionType == enums.Sale {
 			transactionTypeString = "Sold"
 			transactionTitle = "S"
 			filColor = "#AD3434"

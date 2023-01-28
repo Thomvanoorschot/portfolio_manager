@@ -5,4 +5,5 @@ type UnitOfWork struct {
 	PortfolioRepository      *PortfolioRepository
 	HistoricalDataRepository *HistoricalDataRepository
 	AllocationRepository     *AllocationRepository
+	CashBalanceRepository    *CashBalanceRepository
 }

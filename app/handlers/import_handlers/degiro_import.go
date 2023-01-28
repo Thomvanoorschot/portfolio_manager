@@ -26,7 +26,7 @@ const (
 )
 
 var (
-	SymbolMap = map[string]string{}
+	YahooSearches = map[string]*YahooSearch{}
 )
 
 type Commission struct {
@@ -37,7 +37,8 @@ type Commissions []*Commission
 
 type YahooSearch struct {
 	Quotes []struct {
-		Symbol string `json:"symbol"`
+		Symbol    string `json:"symbol"`
+		QuoteType string `json:"quoteType"`
 	} `json:"quotes"`
 }
 
@@ -50,11 +51,16 @@ func DegiroImport(server *server.Webserver, ctx *gin.Context) {
 
 	var convertedTransactions entities.Transactions
 	var commissions Commissions
-	portfolioUuid := uuid.MustParse(portfolioId)
-	var previouslyConvertedTransactions entities.Transactions
-	if portfolioId != "" {
-		previouslyConvertedTransactions = server.UnitOfWork.TransactionRepository.GetByPortfolioId(portfolioUuid)
+	portfolio := &entities.Portfolio{
+		Transactions: entities.Transactions{},
+		CashBalances: entities.CashBalances{},
 	}
+
+	portfolioUuid, err := uuid.Parse(portfolioId)
+	if err == nil {
+		portfolio = server.UnitOfWork.PortfolioRepository.GetIncludingTransactionsAndCashBalances(portfolioUuid)
+	}
+	var remainingCashInCents int64
 	for {
 		line, readError := reader.Read()
 		if readError == io.EOF {
@@ -65,7 +71,12 @@ func DegiroImport(server *server.Webserver, ctx *gin.Context) {
 			firstLineProcessed = true
 			continue
 		}
-		convertTransaction(line, &convertedTransactions, &commissions, previouslyConvertedTransactions, portfolioUuid)
+		convertTransaction(line, &convertedTransactions, &commissions, portfolio.Transactions, portfolioUuid)
+		if remainingCashInCents == 0 {
+			line[10] = strings.Replace(line[10], ",", ".", -1)
+			remainingCash, _ := strconv.ParseFloat(line[10], 64)
+			remainingCashInCents = int64(remainingCash * 100)
+		}
 	}
 	if len(convertedTransactions) == 0 {
 		return
@@ -75,10 +86,18 @@ func DegiroImport(server *server.Webserver, ctx *gin.Context) {
 		server.UnitOfWork.PortfolioRepository.Create(&entities.Portfolio{
 			Title:        "Main portfolio",
 			Transactions: convertedTransactions,
-			EntityBase:   entities.EntityBase{},
+			CashBalances: entities.CashBalances{&entities.CashBalance{
+				PortfolioID:   portfolioUuid,
+				CurrencyCode:  "EUR",
+				AmountInCents: remainingCashInCents,
+			}},
+			EntityBase: entities.EntityBase{},
 		})
 	} else {
 		server.UnitOfWork.TransactionRepository.AddToPortfolio(convertedTransactions)
+		for _, balance := range portfolio.CashBalances {
+			server.UnitOfWork.CashBalanceRepository.Update(balance.ID, "EUR", remainingCashInCents)
+		}
 	}
 }
 
@@ -150,6 +169,7 @@ func convertDeposit(line []string,
 		return
 	}
 	transaction.Product = "CASH"
+	transaction.AssetType = enums.Cash
 	transaction.Amount = 1
 	transaction.PriceInCents = int64(cost * 100)
 	transaction.TransactionType = enums.Deposit
@@ -165,6 +185,7 @@ func convertWithdrawal(line []string,
 		return
 	}
 	transaction.Product = "CASH"
+	transaction.AssetType = enums.Cash
 	transaction.Amount = 1
 	transaction.PriceInCents = int64(cost*100) * -1
 	transaction.TransactionType = enums.Withdrawal
@@ -181,7 +202,7 @@ func convertBuyOrSellTransaction(line []string,
 
 	transactionType, _ := entities.ConvertToTransactionType(parsedDescription[1])
 	amount, _ := strconv.ParseFloat(parsedDescription[2], 64)
-	if transactionType == enums.Sell {
+	if transactionType == enums.Sale {
 		amount = amount * -1
 	}
 	parsedDescription[3] = strings.Replace(parsedDescription[3], ",", ".", -1)
@@ -189,7 +210,16 @@ func convertBuyOrSellTransaction(line []string,
 	transaction.Amount = amount
 	transaction.PriceInCents = int64(pricePerUnit * 100)
 	transaction.TransactionType = transactionType
-	transaction.Symbol = getSymbol(transaction.ISIN)
+	searchResult, err := yahooSearch(transaction.ISIN)
+	if err == nil && len(searchResult.Quotes) > 0 {
+		transaction.Symbol = searchResult.Quotes[0].Symbol
+		switch searchResult.Quotes[0].QuoteType {
+		case "EQUITY":
+			transaction.AssetType = enums.Equity
+		case "ETF":
+			transaction.AssetType = enums.ETF
+		}
+	}
 	*transactions = append(*transactions, transaction)
 }
 func convertGeneralTransactionInfo(line []string,
@@ -217,15 +247,15 @@ func convertGeneralTransactionInfo(line []string,
 	transaction.PortfolioID = portfolioId
 }
 
-func getSymbol(searchTerm string) string {
-	symbol, found := SymbolMap[searchTerm]
+func yahooSearch(searchTerm string) (*YahooSearch, error) {
+	symbol, found := YahooSearches[searchTerm]
 	if found {
-		return symbol
+		return symbol, nil
 	}
 	url := fmt.Sprintf("https://query2.finance.yahoo.com/v1/finance/search?q=%s&lang=en-US&region=US&quotesCount=1&newsCount=0&listsCount=0&enableFuzzyQuery=false&quotesQueryId=tss_match_phrase_query&multiQuoteQueryId=multi_quote_single_token_query&newsQueryId=news_cie_vespa&enableCb=true&enableNavLinks=false&enableEnhancedTrivialQuery=false&enableResearchReports=false&enableCulturalAssets=false&enableLogoUrl=false&researchReportsCount=0", searchTerm)
 	r, err := http.Get(url)
 	if err != nil {
-		return ""
+		return nil, err
 	}
 	defer func(Body io.ReadCloser) {
 		err := Body.Close()
@@ -235,13 +265,8 @@ func getSymbol(searchTerm string) string {
 	}(r.Body)
 	searchResult := &YahooSearch{}
 	_ = json.NewDecoder(r.Body).Decode(searchResult)
-
-	if len(searchResult.Quotes) == 0 {
-		SymbolMap[searchTerm] = ""
-		return ""
-	}
-	SymbolMap[searchTerm] = searchResult.Quotes[0].Symbol
-	return searchResult.Quotes[0].Symbol
+	YahooSearches[searchTerm] = searchResult
+	return searchResult, nil
 }
 
 func computeHashForList(list []string) string {

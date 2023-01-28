@@ -27,13 +27,18 @@ func (p *TransactionRepository) GetDepositAndWithdrawalTransactions(id uuid.UUID
 
 func (p *TransactionRepository) GetBuyAndSellTransactions(id uuid.UUID) entities.Transactions {
 	transactions := entities.Transactions{}
-	p.DB.Where("transaction_type IN ? AND portfolio_id = ?", []enums.TransactionType{enums.Buy, enums.Sell}, id).Order("transacted_at asc").Find(&transactions)
+	p.DB.Where("transaction_type IN ? AND portfolio_id = ?", []enums.TransactionType{enums.Purchase, enums.Sale}, id).Order("transacted_at asc").Find(&transactions)
 	return transactions
 }
 func (p *TransactionRepository) GetByPortfolioId(id uuid.UUID) entities.Transactions {
 	transactions := entities.Transactions{}
 	p.DB.Where("portfolio_id = ?", id).Order("transacted_at asc").Find(&transactions)
 	return transactions
+}
+func (p *TransactionRepository) GetLastTransaction() *entities.Transaction {
+	transaction := &entities.Transaction{}
+	p.DB.Order("transacted_at desc").First(transaction)
+	return transaction
 }
 
 func (p *TransactionRepository) GetUniqueSymbolsForPortfolio(id uuid.UUID) []string {
@@ -52,6 +57,7 @@ func (p *TransactionRepository) AddToPortfolio(transactions entities.Transaction
 func (p *TransactionRepository) UpdateSymbols(portfolioId string, oldSymbol string, newSymbol string) {
 	p.DB.Model(&entities.Transaction{}).Where("portfolio_id = ? AND symbol = ?", portfolioId, oldSymbol).Update("symbol", newSymbol)
 }
+
 func (p *TransactionRepository) Update(transaction *entities.Transaction) {
 	p.DB.Model(&entities.Transaction{}).Where("id = ?", transaction.ID).Select("transacted_at",
 		"currency_code",
@@ -64,7 +70,7 @@ func (p *TransactionRepository) Update(transaction *entities.Transaction) {
 
 //
 //TransactedAt:      requestBody.TransactedAt,
-//CurrencyCode:      requestBody.Currency,
+//CurrencyCode:      requestBody.CurrencyCode,
 //TransactionType:   requestBody.TransactionType,
 //Amount:            requestBody.Amount,
 //PriceInCents:      requestBody.PriceInCents,

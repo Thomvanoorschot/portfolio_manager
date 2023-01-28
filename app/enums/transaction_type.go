@@ -1,11 +1,11 @@
 package enums
 
-type TransactionType int
+type TransactionType string
 
 const (
-	Unknown TransactionType = iota + 1
-	Buy
-	Sell
-	Deposit
-	Withdrawal
+	TransactionTypeUnknown TransactionType = "Unknown"
+	Purchase                               = "Purchase"
+	Sale                                   = "Sale"
+	Deposit                                = "Deposit"
+	Withdrawal                             = "Withdrawal"
 )
