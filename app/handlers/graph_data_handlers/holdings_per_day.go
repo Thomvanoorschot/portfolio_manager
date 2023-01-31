@@ -35,7 +35,7 @@ func HoldingsPerDay(server *server.Webserver, ctx *gin.Context) {
 	portfolioId := ctx.Param("portfolioId")
 
 	transactionRepository := server.UnitOfWork.TransactionRepository
-	transactions := transactionRepository.GetBuyAndSellTransactions(uuid.MustParse(portfolioId))
+	transactions := transactionRepository.GetHoldingsTransactions(uuid.MustParse(portfolioId))
 	if len(transactions) == 0 {
 		return
 	}
@@ -93,17 +93,13 @@ func HoldingsPerDay(server *server.Webserver, ctx *gin.Context) {
 			wg.Add(1)
 			go func(symbol string, h *holding, c chan float64) {
 				defer wg.Done()
-				//var priceOfSymbolPriceAtGivenTime float64
-				//for _, historicalData := range historicalDataPerSymbol[symbol] {
-				//	if historicalData.Timestamp.Year() == d.Year() && historicalData.Timestamp.Month() == d.Month() && historicalData.Timestamp.Day() == d.Day() {
-				//		priceOfSymbolPriceAtGivenTime = historicalData.Close
-				//		break
-				//	}
-				//}
 				symbolPriceAtGivenTime := historicalDataPerSymbol[symbol][d]
 				var priceOfSymbolPriceAtGivenTime float64
 				if symbolPriceAtGivenTime != nil {
 					priceOfSymbolPriceAtGivenTime = symbolPriceAtGivenTime.AdjustedClose
+				}
+				if symbol == "USD" || symbol == "EUR" {
+					priceOfSymbolPriceAtGivenTime = 1
 				}
 				if priceOfSymbolPriceAtGivenTime == 0 {
 					read := readOp{

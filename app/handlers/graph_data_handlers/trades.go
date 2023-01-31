@@ -21,7 +21,7 @@ type Flag struct {
 func Trades(server *server.Webserver, ctx *gin.Context) {
 	portfolioId := ctx.Param("portfolioId")
 	transactionRepository := server.UnitOfWork.TransactionRepository
-	transactions := transactionRepository.GetBuyAndSellTransactions(uuid.MustParse(portfolioId))
+	transactions := transactionRepository.GetHoldingsTransactions(uuid.MustParse(portfolioId))
 	if len(transactions) == 0 {
 		return
 	}

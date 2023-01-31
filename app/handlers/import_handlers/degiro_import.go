@@ -53,14 +53,12 @@ func DegiroImport(server *server.Webserver, ctx *gin.Context) {
 	var commissions Commissions
 	portfolio := &entities.Portfolio{
 		Transactions: entities.Transactions{},
-		CashBalances: entities.CashBalances{},
 	}
 
 	portfolioUuid, err := uuid.Parse(portfolioId)
 	if err == nil {
-		portfolio = server.UnitOfWork.PortfolioRepository.GetIncludingTransactionsAndCashBalances(portfolioUuid)
+		portfolio = server.UnitOfWork.PortfolioRepository.GetIncludingTransactions(portfolioUuid)
 	}
-	var remainingCashInCents int64
 	for {
 		line, readError := reader.Read()
 		if readError == io.EOF {
@@ -72,11 +70,6 @@ func DegiroImport(server *server.Webserver, ctx *gin.Context) {
 			continue
 		}
 		convertTransaction(line, &convertedTransactions, &commissions, portfolio.Transactions, portfolioUuid)
-		if remainingCashInCents == 0 {
-			line[10] = strings.Replace(line[10], ",", ".", -1)
-			remainingCash, _ := strconv.ParseFloat(line[10], 64)
-			remainingCashInCents = int64(remainingCash * 100)
-		}
 	}
 	if len(convertedTransactions) == 0 {
 		return
@@ -86,18 +79,10 @@ func DegiroImport(server *server.Webserver, ctx *gin.Context) {
 		server.UnitOfWork.PortfolioRepository.Create(&entities.Portfolio{
 			Title:        "Main portfolio",
 			Transactions: convertedTransactions,
-			CashBalances: entities.CashBalances{&entities.CashBalance{
-				PortfolioID:   portfolioUuid,
-				CurrencyCode:  "EUR",
-				AmountInCents: remainingCashInCents,
-			}},
-			EntityBase: entities.EntityBase{},
+			EntityBase:   entities.EntityBase{},
 		})
 	} else {
 		server.UnitOfWork.TransactionRepository.AddToPortfolio(convertedTransactions)
-		for _, balance := range portfolio.CashBalances {
-			server.UnitOfWork.CashBalanceRepository.Update(balance.ID, "EUR", remainingCashInCents)
-		}
 	}
 }
 
@@ -105,7 +90,7 @@ func setCommissions(transactions *entities.Transactions, commissions *Commission
 	for _, commission := range *commissions {
 		for _, transaction := range *transactions {
 			if transaction.ExternalId == commission.ExternalId {
-				transaction.CommissionInCents = commission.AmountInCents
+				transaction.CommissionInCents += commission.AmountInCents
 			}
 		}
 	}
@@ -128,22 +113,34 @@ func convertTransaction(line []string, transactions *entities.Transactions,
 		convertBuyOrSellTransaction(line, transactions, portfolioId)
 		return
 	}
-
 	isCommissionTransaction := line[5] == "DEGIRO Transactiekosten en/of kosten van derden"
 	if isCommissionTransaction {
 		convertCommission(line, commissions)
 		return
 	}
-
 	isDeposit := line[5] == "Reservation iDEAL / Sofort Deposit" || line[5] == "iDEAL storting"
 	if isDeposit {
 		convertDeposit(line, transactions, portfolioId)
 		return
 	}
-
-	isWithdrawal := line[5] == "Processed Flatex Withdrawal"
+	isWithdrawal := line[5] == "flatex terugstorting" || line[5] == "Terugstorting"
 	if isWithdrawal {
 		convertWithdrawal(line, transactions, portfolioId)
+		return
+	}
+	isDebitOrCredit := line[5] == "Valuta Debitering" || line[5] == "Valuta Creditering"
+	if isDebitOrCredit {
+		convertDebitOrCredit(line, transactions, portfolioId)
+		return
+	}
+	isDividend := line[5] == "Dividend"
+	if isDividend {
+		convertDividend(line, transactions, portfolioId)
+		return
+	}
+	isDividendTax := line[5] == "Dividendbelasting"
+	if isDividendTax {
+		convertDividendTax(line, transactions, portfolioId)
 		return
 	}
 }
@@ -159,6 +156,61 @@ func convertCommission(line []string, commissions *Commissions) {
 	*commissions = append(*commissions, commission)
 }
 
+func convertDividend(line []string,
+	transactions *entities.Transactions,
+	portfolioId uuid.UUID) {
+	transaction := &entities.Transaction{}
+	convertGeneralTransactionInfo(line, transaction, portfolioId)
+	cost, _ := strconv.ParseFloat(line[8], 64)
+	if cost < 0 {
+		return
+	}
+	transaction.Product = "CASH"
+	transaction.AssetType = enums.Cash
+	transaction.Amount = 1
+	transaction.PriceInCents = int64(cost * 100)
+	transaction.TransactionType = enums.Dividend
+	*transactions = append(*transactions, transaction)
+}
+
+func convertDividendTax(line []string,
+	transactions *entities.Transactions,
+	portfolioId uuid.UUID) {
+	transaction := &entities.Transaction{}
+	convertGeneralTransactionInfo(line, transaction, portfolioId)
+	cost, _ := strconv.ParseFloat(line[8], 64)
+	if cost < 0 {
+		return
+	}
+	transaction.Product = "CASH"
+	transaction.AssetType = enums.Cash
+	transaction.Amount = 1
+	transaction.PriceInCents = int64(cost * 100)
+	transaction.TransactionType = enums.DividendTax
+	*transactions = append(*transactions, transaction)
+}
+
+func convertDebitOrCredit(line []string,
+	transactions *entities.Transactions,
+	portfolioId uuid.UUID) {
+	transaction := &entities.Transaction{}
+	convertGeneralTransactionInfo(line, transaction, portfolioId)
+	cost, _ := strconv.ParseFloat(line[8], 64)
+	if cost < 0 {
+		return
+	}
+	transaction.Product = "CASH"
+	transaction.AssetType = enums.Cash
+	transaction.Amount = 1
+	transaction.PriceInCents = int64(cost * 100)
+	transaction.Symbol = transaction.CurrencyCode
+	if line[5] == "Valuta Debitering" {
+		transaction.TransactionType = enums.Debit
+	} else {
+		transaction.TransactionType = enums.Credit
+	}
+	*transactions = append(*transactions, transaction)
+}
 func convertDeposit(line []string,
 	transactions *entities.Transactions,
 	portfolioId uuid.UUID) {
@@ -173,6 +225,7 @@ func convertDeposit(line []string,
 	transaction.Amount = 1
 	transaction.PriceInCents = int64(cost * 100)
 	transaction.TransactionType = enums.Deposit
+	transaction.Symbol = transaction.CurrencyCode
 	*transactions = append(*transactions, transaction)
 }
 func convertWithdrawal(line []string,
@@ -181,14 +234,12 @@ func convertWithdrawal(line []string,
 	transaction := &entities.Transaction{}
 	convertGeneralTransactionInfo(line, transaction, portfolioId)
 	cost, _ := strconv.ParseFloat(line[8], 64)
-	if cost < 0 {
-		return
-	}
 	transaction.Product = "CASH"
 	transaction.AssetType = enums.Cash
 	transaction.Amount = 1
-	transaction.PriceInCents = int64(cost*100) * -1
+	transaction.PriceInCents = int64(cost * 100)
 	transaction.TransactionType = enums.Withdrawal
+	transaction.Symbol = transaction.CurrencyCode
 	*transactions = append(*transactions, transaction)
 }
 

@@ -21,7 +21,7 @@ func Create() *Webserver {
 	g := gin.Default()
 	dsn := "host=localhost user=postgres password=Welkom01! dbname=portfoliomanager sslmode=disable"
 	db, _ := gorm.Open(postgres.Open(dsn), &gorm.Config{})
-	_ = db.AutoMigrate(&entities.Portfolio{}, &entities.Transaction{}, &entities.CashBalance{})
+	_ = db.AutoMigrate(&entities.Portfolio{}, &entities.Transaction{})
 
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 
@@ -34,7 +34,6 @@ func Create() *Webserver {
 		PortfolioRepository:      &repositories.PortfolioRepository{DB: db},
 		HistoricalDataRepository: repositories.ProvideHistoricalDataRepository(nosqlDb),
 		AllocationRepository:     repositories.ProvideAllocationRepository(nosqlDb),
-		CashBalanceRepository:    &repositories.CashBalanceRepository{DB: db},
 	}
 
 	return &Webserver{

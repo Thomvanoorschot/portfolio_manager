@@ -8,4 +8,8 @@ const (
 	Sale                                   = "Sale"
 	Deposit                                = "Deposit"
 	Withdrawal                             = "Withdrawal"
+	Debit                                  = "Debit"
+	Credit                                 = "Credit"
+	Dividend                               = "Dividend"
+	DividendTax                            = "DividendTax"
 )
