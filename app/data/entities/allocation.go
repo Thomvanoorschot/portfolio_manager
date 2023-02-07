@@ -1,13 +1,20 @@
 package entities
 
-type Allocation struct {
-	Symbol     string  `bson:"symbol,omitempty"`
-	Percentage float64 `bson:"percentage,omitempty"`
-	Total      float64 `bson:"total,omitempty"`
-}
+import "encoding/json"
 
 type Allocations struct {
-	PortfolioId string       `bson:"_id,omitempty"`
-	Total       float64      `bson:"total"`
-	Entries     []Allocation `bson:"entries,omitempty"`
+	PortfolioId string             `json:"portfolioId"`
+	Total       float64            `json:"total"`
+	Entries     []*AllocationEntry `json:"entries"`
+}
+
+type AllocationEntry struct {
+	Symbol     string  `json:"symbol"`
+	Percentage float64 `json:"percentage"`
+	Total      float64 `json:"total"`
+	Amount     float64 `json:"amount"`
+}
+
+func (m *Allocations) UnmarshalBinary(data []byte) error {
+	return json.Unmarshal(data, m)
 }

@@ -27,7 +27,7 @@ func (p *TransactionRepository) GetDepositAndWithdrawalTransactions(id uuid.UUID
 
 func (p *TransactionRepository) GetHoldingsTransactions(id uuid.UUID) entities.Transactions {
 	transactions := entities.Transactions{}
-	p.DB.Where("transaction_type IN ? AND portfolio_id = ?", []enums.TransactionType{enums.Purchase, enums.Sale, enums.Debit, enums.Credit, enums.Deposit, enums.Withdrawal}, id).Order("transacted_at asc").Find(&transactions)
+	p.DB.Where("transaction_type IN ? AND portfolio_id = ? AND symbol != ?", []enums.TransactionType{enums.Purchase, enums.Sale}, id, "").Order("transacted_at asc").Find(&transactions)
 	return transactions
 }
 func (p *TransactionRepository) GetByPortfolioId(id uuid.UUID) entities.Transactions {
@@ -43,7 +43,7 @@ func (p *TransactionRepository) GetLastTransaction() *entities.Transaction {
 
 func (p *TransactionRepository) GetUniqueSymbolsForPortfolio(id uuid.UUID) []string {
 	var symbols []string
-	p.DB.Model(&entities.Transaction{}).Where("symbol IS NOT NULL AND portfolio_id = ?", id).Distinct("symbol").Find(&symbols)
+	p.DB.Model(&entities.Transaction{}).Where("symbol IS NOT NULL AND portfolio_id = ? AND symbol != ? AND transaction_type IN ?", id, "", []enums.TransactionType{enums.Purchase, enums.Sale}).Distinct("symbol").Find(&symbols)
 	return symbols
 }
 func (p *TransactionRepository) GetUniqueSymbols() []string {

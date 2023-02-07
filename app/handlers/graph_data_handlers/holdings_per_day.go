@@ -1,7 +1,6 @@
 package graph_data_handlers
 
 import (
-	"fmt"
 	"github.com/Thomvanoorschot/portfolioManager/app/data/entities"
 	"github.com/Thomvanoorschot/portfolioManager/app/helpers"
 	"github.com/Thomvanoorschot/portfolioManager/app/server"
@@ -9,27 +8,8 @@ import (
 	"github.com/google/uuid"
 	"math"
 	"net/http"
-	"sync"
 	"time"
 )
-
-type holding struct {
-	amount                        float64
-	priceOfSymbolPriceAtGivenTime float64
-	total                         float64
-}
-
-type readOp struct {
-	date   time.Time
-	symbol string
-	resp   chan *holding
-}
-type writeOp struct {
-	date   time.Time
-	symbol string
-	val    *holding
-	resp   chan bool
-}
 
 func HoldingsPerDay(server *server.Webserver, ctx *gin.Context) {
 	portfolioId := ctx.Param("portfolioId")
@@ -44,122 +24,94 @@ func HoldingsPerDay(server *server.Webserver, ctx *gin.Context) {
 	start := helpers.TruncateToDay(firstTransaction.TransactedAt)
 	end := helpers.TruncateToDay(time.Now())
 	uniqueSymbols := transactionRepository.GetUniqueSymbolsForPortfolio(uuid.MustParse(portfolioId))
-	historicalDataPerSymbol := server.UnitOfWork.HistoricalDataRepository.GetBySymbols(uniqueSymbols)
+	historicalData := server.UnitOfWork.HistoricalDataRepository.GetBySymbols(uniqueSymbols)
 
-	holdings := map[time.Time]map[string]*holding{}
-	reads := make(chan readOp)
-	writes := make(chan writeOp)
-	go func(h map[time.Time]map[string]*holding) {
-		var state = h
-		for {
-			select {
-			case read := <-reads:
-				read.resp <- state[read.date][read.symbol]
-			case write := <-writes:
-				if state[write.date] == nil {
-					state[write.date] = map[string]*holding{}
-				}
-				state[write.date][write.symbol] = write.val
-				write.resp <- true
-			}
-		}
-	}(holdings)
 	var resp [][]float64
+	holdings := getHoldingsPerDay(server, portfolioId, start, end)
+	previousHistoricalData := map[string][]float64{}
 	for d := start; d.After(end) == false; d = d.AddDate(0, 0, 1) {
-		for _, transaction := range transactions {
-			truncatedTransactedAt := helpers.TruncateToDay(transaction.TransactedAt)
-			if !truncatedTransactedAt.Equal(d) {
-				continue
-			}
-			if holdings[truncatedTransactedAt] == nil {
-				holdings[truncatedTransactedAt] = map[string]*holding{}
-			}
-			thisDaysHoldings := holdings[truncatedTransactedAt]
-			thisDaysSymbolHoldings := thisDaysHoldings[transaction.Symbol]
-			if thisDaysSymbolHoldings == nil {
-				newHolding := &holding{}
-				thisDaysHoldings[transaction.Symbol] = newHolding
-				thisDaysSymbolHoldings = newHolding
-			}
-			thisDaysSymbolHoldings.amount += transaction.Amount
-		}
-
 		var dayPrice float64
-		wg := sync.WaitGroup{}
-		currentHoldings := holdings[d]
-		c := make(chan float64, len(currentHoldings))
-
-		for symbol, h := range currentHoldings {
-			wg.Add(1)
-			go func(symbol string, h *holding, c chan float64) {
-				defer wg.Done()
-				symbolPriceAtGivenTime := historicalDataPerSymbol[symbol][d]
-				var priceOfSymbolPriceAtGivenTime float64
-				if symbolPriceAtGivenTime != nil {
-					priceOfSymbolPriceAtGivenTime = symbolPriceAtGivenTime.AdjustedClose
-				}
-				if symbol == "USD" || symbol == "EUR" {
-					priceOfSymbolPriceAtGivenTime = 1
-				}
-				if priceOfSymbolPriceAtGivenTime == 0 {
-					read := readOp{
-						date:   d.AddDate(0, 0, -1),
-						symbol: symbol,
-						resp:   make(chan *holding),
-					}
-					reads <- read
-					s := <-read.resp
-					if s != nil {
-						priceOfSymbolPriceAtGivenTime = s.priceOfSymbolPriceAtGivenTime
-					} else {
-						fmt.Println("Could not find price")
-					}
-					// TODO Deal with symbol changes not having historical data
-				}
-				h.priceOfSymbolPriceAtGivenTime = priceOfSymbolPriceAtGivenTime
-				h.total = priceOfSymbolPriceAtGivenTime * h.amount
-				c <- h.total
-				write := writeOp{
-					date:   d.AddDate(0, 0, 1),
-					symbol: symbol,
-					val: &holding{
-						amount:                        h.amount,
-						priceOfSymbolPriceAtGivenTime: h.priceOfSymbolPriceAtGivenTime,
-						total:                         h.total,
-					},
-					resp: make(chan bool),
-				}
-				writes <- write
-				<-write.resp
-			}(symbol, h, c)
+		for symbol, h := range holdings[d] {
+			adjustedClose := historicalData[symbol][d].AdjustedClose
+			if adjustedClose != 0 {
+				previousHistoricalData[symbol] = append(previousHistoricalData[symbol], adjustedClose)
+			} else {
+				adjustedClose = previousHistoricalData[symbol][len(previousHistoricalData[symbol])-1]
+			}
+			dayPrice += h * adjustedClose
 		}
-		wg.Wait()
-		close(c)
-		for elem := range c {
-			dayPrice += elem
-		}
-
 		resp = append(resp, []float64{float64(d.UnixMilli()), math.Round(dayPrice*100) / 100})
 	}
 
-	var amountSum float64
-	for _, h := range holdings[end] {
-		amountSum += h.total
-	}
-	allocations := entities.Allocations{
-		Total: amountSum,
+	persistAllocations(resp,
+		portfolioId,
+		holdings,
+		end,
+		previousHistoricalData,
+		server)
+
+	ctx.JSON(http.StatusOK, resp)
+}
+
+func persistAllocations(resp [][]float64,
+	portfolioId string,
+	holdings map[time.Time]map[string]float64,
+	end time.Time,
+	previousHistoricalData map[string][]float64,
+	server *server.Webserver,
+) {
+	endingDaySum := resp[len(resp)-1][1]
+	allocations := &entities.Allocations{
+		PortfolioId: portfolioId,
+		Total:       endingDaySum,
 	}
 	for symbol, h := range holdings[end] {
-		if h.amount == 0 {
+		if h == 0 {
 			continue
 		}
-		allocations.Entries = append(allocations.Entries, entities.Allocation{
+		endingDaySymbolTotalValue := previousHistoricalData[symbol][len(previousHistoricalData[symbol])-1]
+		total := endingDaySymbolTotalValue * h
+		allocations.Entries = append(allocations.Entries, &entities.AllocationEntry{
 			Symbol:     symbol,
-			Percentage: h.total / amountSum * 100,
-			Total:      h.total,
+			Percentage: total / endingDaySum * 100,
+			Total:      total,
+			Amount:     h,
 		})
 	}
 	server.UnitOfWork.AllocationRepository.Upsert(portfolioId, allocations)
+}
 
-	ctx.JSON(http.StatusOK, resp)
+func processTransactions(transactions entities.Transactions) map[time.Time]entities.Transactions {
+	mappedTransactions := map[time.Time]entities.Transactions{}
+	for _, transaction := range transactions {
+		truncatedTransactedAt := helpers.TruncateToDay(transaction.TransactedAt)
+		mappedTransactions[truncatedTransactedAt] = append(mappedTransactions[truncatedTransactedAt], transaction)
+	}
+	return mappedTransactions
+}
+
+func getHoldingsPerDay(server *server.Webserver,
+	portfolioId string,
+	start time.Time,
+	end time.Time) map[time.Time]map[string]float64 {
+	transactions := server.UnitOfWork.TransactionRepository.GetHoldingsTransactions(uuid.MustParse(portfolioId))
+
+	mappedTransactions := processTransactions(transactions)
+	holdings := map[time.Time]map[string]float64{}
+	for d := start; d.After(end) == false; d = d.AddDate(0, 0, 1) {
+		holdings[d] = map[string]float64{}
+		transactions, _ := mappedTransactions[d]
+		if d != start {
+			copyOfPreviousDay := map[string]float64{}
+			previousDayHoldings := holdings[d.AddDate(0, 0, -1)]
+			for k, v := range previousDayHoldings {
+				copyOfPreviousDay[k] = v
+			}
+			holdings[d] = copyOfPreviousDay
+		}
+		for _, transaction := range transactions {
+			holdings[d][transaction.Symbol] += transaction.Amount
+		}
+	}
+	return holdings
 }

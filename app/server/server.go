@@ -1,15 +1,12 @@
 package server
 
 import (
-	"context"
 	"github.com/Thomvanoorschot/portfolioManager/app/data/entities"
 	"github.com/Thomvanoorschot/portfolioManager/app/data/repositories"
 	"github.com/gin-gonic/gin"
-	"go.mongodb.org/mongo-driver/mongo"
-	"go.mongodb.org/mongo-driver/mongo/options"
+	"github.com/redis/go-redis/v9"
 	"gorm.io/driver/postgres"
 	"gorm.io/gorm"
-	"time"
 )
 
 type Webserver struct {
@@ -23,17 +20,17 @@ func Create() *Webserver {
 	db, _ := gorm.Open(postgres.Open(dsn), &gorm.Config{})
 	_ = db.AutoMigrate(&entities.Portfolio{}, &entities.Transaction{})
 
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-
-	defer cancel()
-	client, _ := mongo.Connect(ctx, options.Client().ApplyURI("mongodb://localhost:27017"))
-	nosqlDb := client.Database("historicalData")
+	rdb := redis.NewClient(&redis.Options{
+		Addr:     "localhost:6379",
+		Password: "", // no password set
+		DB:       0,  // use default DB
+	})
 
 	unitOfWork := &repositories.UnitOfWork{
 		TransactionRepository:    &repositories.TransactionRepository{DB: db},
 		PortfolioRepository:      &repositories.PortfolioRepository{DB: db},
-		HistoricalDataRepository: repositories.ProvideHistoricalDataRepository(nosqlDb),
-		AllocationRepository:     repositories.ProvideAllocationRepository(nosqlDb),
+		HistoricalDataRepository: repositories.ProvideHistoricalDataRepository(rdb),
+		AllocationRepository:     repositories.ProvideAllocationRepository(rdb),
 	}
 
 	return &Webserver{

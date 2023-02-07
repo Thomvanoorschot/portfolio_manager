@@ -2,72 +2,69 @@ package repositories
 
 import (
 	"context"
-	"fmt"
+	"encoding/json"
 	"github.com/Thomvanoorschot/portfolioManager/app/data/entities"
-	"github.com/Thomvanoorschot/portfolioManager/app/helpers"
-	"go.mongodb.org/mongo-driver/bson"
-	"go.mongodb.org/mongo-driver/mongo"
-	"go.mongodb.org/mongo-driver/mongo/options"
+	"github.com/redis/go-redis/v9"
 	"time"
 )
 
 type HistoricalDataRepository struct {
-	Collection *mongo.Collection
+	Rdb *redis.Client
 }
 
-func ProvideHistoricalDataRepository(database *mongo.Database) *HistoricalDataRepository {
-	historicalDataCollection := database.Collection("historicalData")
-	return &HistoricalDataRepository{Collection: historicalDataCollection}
+func ProvideHistoricalDataRepository(rdb *redis.Client) *HistoricalDataRepository {
+	return &HistoricalDataRepository{rdb}
 }
 
-func (p *HistoricalDataRepository) GetBySymbols(symbols []string) map[string]map[time.Time]*entities.HistoricalDataEntry {
-	var historicalData []entities.HistoricalData
-	filter := bson.M{"_id": bson.M{"$in": symbols}}
-
-	find, _ := p.Collection.Find(context.TODO(), filter)
-	_ = find.All(context.TODO(), &historicalData)
-
-	m := make(map[string]map[time.Time]*entities.HistoricalDataEntry)
-	for _, d := range historicalData {
-		m[d.Symbol] = d.Entries
+func (p *HistoricalDataRepository) GetBySymbols(symbols []string) map[string]map[time.Time]entities.HistoricalDataEntry {
+	historicalDataList := map[string]map[time.Time]entities.HistoricalDataEntry{}
+	result, _ := p.Rdb.HMGet(context.Background(), "historical", symbols...).Result()
+	c := make(chan entities.HistoricalData)
+	for _, res := range result {
+		go func(res interface{}) {
+			historicalData := entities.HistoricalData{}
+			_ = json.Unmarshal([]byte(res.(string)), &historicalData)
+			c <- historicalData
+		}(res)
 	}
-	return m
+	for i := 0; i < len(result); i++ {
+		res := <-c
+		historicalDataList[res.Symbol] = res.Entries
+	}
+	return historicalDataList
 }
 
 func (p *HistoricalDataRepository) GetLastBySymbol(symbols []string) map[string]*entities.HistoricalDataEntry {
-	var historicalData []entities.HistoricalData
-	filter := bson.M{"_id": bson.M{"$in": symbols}}
-
-	find, _ := p.Collection.Find(context.TODO(), filter)
-	_ = find.All(context.TODO(), &historicalData)
-
-	m := map[string]*entities.HistoricalDataEntry{}
-	for _, d := range historicalData {
-		if d.Entries == nil {
-			continue
-		}
-		for i := 0; i < 30; i++ {
-			last := d.Entries[helpers.TruncateToDay(time.Now().AddDate(0, 0, -i))]
-			if last != nil {
-				m[d.Symbol] = last
-				break
-			}
-		}
-	}
-	return m
+	//var historicalData []entities.HistoricalData
+	//filter := bson.M{"_id": bson.M{"$in": symbols}}
+	//
+	//find, _ := p.Collection.Find(context.TODO(), filter)
+	//_ = find.All(context.TODO(), &historicalData)
+	//
+	//m := map[string]*entities.HistoricalDataEntry{}
+	//for _, d := range historicalData {
+	//	if d.Entries == nil {
+	//		continue
+	//	}
+	//	for i := 0; i < 30; i++ {
+	//		last := d.Entries[helpers.TruncateToDay(time.Now().AddDate(0, 0, -i))]
+	//		if last != nil {
+	//			m[d.Symbol] = last
+	//			break
+	//		}
+	//	}
+	//}
+	return nil
 }
 func (p *HistoricalDataRepository) GetBySymbol(symbol string) *entities.HistoricalData {
-	var historicalData entities.HistoricalData
-	filter := bson.D{{"_id", symbol}}
-
-	_ = p.Collection.FindOne(context.TODO(), filter).Decode(&historicalData)
-	return &historicalData
+	historicalData := &entities.HistoricalData{}
+	_ = p.Rdb.HGet(context.Background(), "historical", symbol).Scan(historicalData)
+	return nil
 }
-func (p *HistoricalDataRepository) Insert(historicalData *entities.HistoricalData) {
-	filter := bson.M{"_id": historicalData.Symbol}
-	upsert := true
-	_, err := p.Collection.ReplaceOne(context.TODO(), filter, historicalData, &options.ReplaceOptions{Upsert: &upsert})
+func (p *HistoricalDataRepository) Upsert(historicalData *entities.HistoricalData) {
+	bytes, _ := json.Marshal(historicalData)
+	_, err := p.Rdb.HSet(context.Background(), "historical", historicalData.Symbol, bytes).Result()
 	if err != nil {
-		fmt.Println(err)
+		return
 	}
 }

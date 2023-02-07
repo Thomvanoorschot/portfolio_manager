@@ -5,16 +5,16 @@ import (
 )
 
 type HistoricalData struct {
-	Symbol  string                             `bson:"_id,omitempty"`
-	Entries map[time.Time]*HistoricalDataEntry `bson:"entries,omitempty"`
+	Symbol  string                            `json:"symbol"`
+	Entries map[time.Time]HistoricalDataEntry `json:"entries"`
 }
 
 type HistoricalDataEntry struct {
-	Timestamp     time.Time `bson:"timestamp,omitempty"`
-	Open          float64   `bson:"open,omitempty"`
-	High          float64   `bson:"high,omitempty"`
-	Low           float64   `bson:"low,omitempty"`
-	Close         float64   `bson:"close,omitempty"`
-	AdjustedClose float64   `bson:"adjustedClose,omitempty"`
-	Volume        int       `bson:"volume,omitempty"`
+	Timestamp     time.Time `json:"timestamp"`
+	Open          float64   `json:"open"`
+	High          float64   `json:"high"`
+	Low           float64   `json:"low"`
+	Close         float64   `json:"close"`
+	AdjustedClose float64   `json:"adjustedClose"`
+	Volume        int       `json:"volume"`
 }
