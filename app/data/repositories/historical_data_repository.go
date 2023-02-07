@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"github.com/Thomvanoorschot/portfolioManager/app/data/entities"
+	"github.com/Thomvanoorschot/portfolioManager/app/helpers"
 	"github.com/redis/go-redis/v9"
 	"time"
 )
@@ -35,26 +36,19 @@ func (p *HistoricalDataRepository) GetBySymbols(symbols []string) map[string]map
 }
 
 func (p *HistoricalDataRepository) GetLastBySymbol(symbols []string) map[string]*entities.HistoricalDataEntry {
-	//var historicalData []entities.HistoricalData
-	//filter := bson.M{"_id": bson.M{"$in": symbols}}
-	//
-	//find, _ := p.Collection.Find(context.TODO(), filter)
-	//_ = find.All(context.TODO(), &historicalData)
-	//
-	//m := map[string]*entities.HistoricalDataEntry{}
-	//for _, d := range historicalData {
-	//	if d.Entries == nil {
-	//		continue
-	//	}
-	//	for i := 0; i < 30; i++ {
-	//		last := d.Entries[helpers.TruncateToDay(time.Now().AddDate(0, 0, -i))]
-	//		if last != nil {
-	//			m[d.Symbol] = last
-	//			break
-	//		}
-	//	}
-	//}
-	return nil
+	m := map[string]*entities.HistoricalDataEntry{}
+	bySymbols := p.GetBySymbols(symbols)
+	for s, dataPerSymbol := range bySymbols {
+		for i := 0; i < 30; i++ {
+			last := dataPerSymbol[helpers.TruncateToDay(time.Now().AddDate(0, 0, -i))]
+			if &last != nil {
+				m[s] = &last
+				break
+			}
+		}
+	}
+
+	return m
 }
 func (p *HistoricalDataRepository) GetBySymbol(symbol string) *entities.HistoricalData {
 	historicalData := &entities.HistoricalData{}
