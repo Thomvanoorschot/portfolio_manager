@@ -1,7 +1,7 @@
 package graph_data_handlers
 
 import (
-	"github.com/Thomvanoorschot/portfolioManager/app/server"
+	"github.com/Thomvanoorschot/portfolioManager/app/data/repositories"
 	"github.com/gin-gonic/gin"
 	"net/http"
 )
@@ -11,10 +11,18 @@ type Allocation struct {
 	Y    float64 `json:"y"`
 }
 
-func PercentageAllocations(server *server.Webserver, ctx *gin.Context) {
+type PercentageAllocations struct {
+	allocationRepository *repositories.AllocationRepository
+}
+
+func NewPercentageAllocations(allocationRepository *repositories.AllocationRepository) *PercentageAllocations {
+	return &PercentageAllocations{allocationRepository: allocationRepository}
+}
+
+func (handler *PercentageAllocations) Handle(ctx *gin.Context) {
 	portfolioId := ctx.Param("portfolioId")
 
-	allocations := server.UnitOfWork.AllocationRepository.GetByPortfolioId(portfolioId)
+	allocations := handler.allocationRepository.GetByPortfolioId(portfolioId)
 
 	var allocationsModel []Allocation
 	for _, allocation := range allocations.Entries {

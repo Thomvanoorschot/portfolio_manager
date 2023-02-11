@@ -13,8 +13,8 @@ type HistoricalDataRepository struct {
 	Rdb *redis.Client
 }
 
-func ProvideHistoricalDataRepository(rdb *redis.Client) *HistoricalDataRepository {
-	return &HistoricalDataRepository{rdb}
+func NewHistoricalDataRepository(rdb *redis.Client) *HistoricalDataRepository {
+	return &HistoricalDataRepository{Rdb: rdb}
 }
 
 func (p *HistoricalDataRepository) GetBySymbols(symbols []string) map[string]map[time.Time]entities.HistoricalDataEntry {

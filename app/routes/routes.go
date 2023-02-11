@@ -1,19 +1,20 @@
 package routes
 
 import (
-	"github.com/Thomvanoorschot/portfolioManager/app/server"
 	"github.com/gin-gonic/gin"
+	"github.com/redis/go-redis/v9"
+	"gorm.io/gorm"
 )
 
-func SetupRouter(server *server.Webserver) {
-	server.Use(CORSMiddleware())
+func SetupV1Routes(r *gin.Engine,
+	postgresClient *gorm.DB,
+	redisClient *redis.Client) {
+	r.Use(CORSMiddleware())
 
-	routerGroup := server.Group("/api/v1")
-	{
-		GetGraphDataRoutes(routerGroup, server)
-		GetImportRoutes(routerGroup, server)
-		GetTransactionRoutes(routerGroup, server)
-	}
+	v1 := r.Group("/api/v1")
+	SetupGraphDataRoutes(v1, postgresClient, redisClient)
+	SetupImportRoutes(v1, postgresClient, redisClient)
+	SetupTransactionRoutes(v1, postgresClient)
 }
 
 func CORSMiddleware() gin.HandlerFunc {

@@ -2,9 +2,9 @@ package graph_data_handlers
 
 import (
 	"fmt"
+	"github.com/Thomvanoorschot/portfolioManager/app/data/repositories"
 	"github.com/Thomvanoorschot/portfolioManager/app/enums"
 	"github.com/Thomvanoorschot/portfolioManager/app/helpers"
-	"github.com/Thomvanoorschot/portfolioManager/app/server"
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
 	"net/http"
@@ -18,16 +18,26 @@ type Flag struct {
 	LineColor string `json:"lineColor"`
 }
 
-func Trades(server *server.Webserver, ctx *gin.Context) {
+type Trades struct {
+	historicalDataRepository *repositories.HistoricalDataRepository
+	transactionRepository    *repositories.TransactionRepository
+}
+
+func NewTrades(historicalDataRepository *repositories.HistoricalDataRepository,
+	transactionRepository *repositories.TransactionRepository) *Trades {
+	return &Trades{historicalDataRepository: historicalDataRepository,
+		transactionRepository: transactionRepository}
+}
+
+func (handler *Trades) Handle(ctx *gin.Context) {
 	portfolioId := ctx.Param("portfolioId")
-	transactionRepository := server.UnitOfWork.TransactionRepository
-	transactions := transactionRepository.GetHoldingsTransactions(uuid.MustParse(portfolioId))
+	transactions := handler.transactionRepository.GetHoldingsTransactions(uuid.MustParse(portfolioId))
 	if len(transactions) == 0 {
 		return
 	}
 
-	uniqueSymbols := transactionRepository.GetUniqueSymbolsForPortfolio(uuid.MustParse(portfolioId))
-	historicalDataPerSymbol := server.UnitOfWork.HistoricalDataRepository.GetLastBySymbol(uniqueSymbols)
+	uniqueSymbols := handler.transactionRepository.GetUniqueSymbolsForPortfolio(uuid.MustParse(portfolioId))
+	historicalDataPerSymbol := handler.historicalDataRepository.GetLastBySymbol(uniqueSymbols)
 
 	var flags []*Flag
 	for _, transaction := range transactions {

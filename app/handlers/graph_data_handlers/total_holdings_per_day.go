@@ -2,8 +2,8 @@ package graph_data_handlers
 
 import (
 	"github.com/Thomvanoorschot/portfolioManager/app/data/entities"
+	"github.com/Thomvanoorschot/portfolioManager/app/data/repositories"
 	"github.com/Thomvanoorschot/portfolioManager/app/helpers"
-	"github.com/Thomvanoorschot/portfolioManager/app/server"
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
 	"math"
@@ -11,11 +11,27 @@ import (
 	"time"
 )
 
-func HoldingsPerDay(server *server.Webserver, ctx *gin.Context) {
+type TotalHoldingsPerDay struct {
+	transactionRepository    *repositories.TransactionRepository
+	historicalDataRepository *repositories.HistoricalDataRepository
+	allocationRepository     *repositories.AllocationRepository
+}
+
+func NewTotalHoldingsPerDay(transactionRepository *repositories.TransactionRepository,
+	historicalDataRepository *repositories.HistoricalDataRepository,
+	allocationRepository *repositories.AllocationRepository,
+) *TotalHoldingsPerDay {
+	return &TotalHoldingsPerDay{
+		transactionRepository:    transactionRepository,
+		historicalDataRepository: historicalDataRepository,
+		allocationRepository:     allocationRepository,
+	}
+}
+
+func (handler *TotalHoldingsPerDay) Handle(ctx *gin.Context) {
 	portfolioId := ctx.Param("portfolioId")
 
-	transactionRepository := server.UnitOfWork.TransactionRepository
-	transactions := transactionRepository.GetHoldingsTransactions(uuid.MustParse(portfolioId))
+	transactions := handler.transactionRepository.GetHoldingsTransactions(uuid.MustParse(portfolioId))
 	if len(transactions) == 0 {
 		return
 	}
@@ -23,11 +39,11 @@ func HoldingsPerDay(server *server.Webserver, ctx *gin.Context) {
 	firstTransaction := transactions[0]
 	start := helpers.TruncateToDay(firstTransaction.TransactedAt)
 	end := helpers.TruncateToDay(time.Now())
-	uniqueSymbols := transactionRepository.GetUniqueSymbolsForPortfolio(uuid.MustParse(portfolioId))
-	historicalData := server.UnitOfWork.HistoricalDataRepository.GetBySymbols(uniqueSymbols)
+	uniqueSymbols := handler.transactionRepository.GetUniqueSymbolsForPortfolio(uuid.MustParse(portfolioId))
+	historicalData := handler.historicalDataRepository.GetBySymbols(uniqueSymbols)
 
 	var resp [][]float64
-	holdings := getHoldingsPerDay(server, portfolioId, start, end)
+	holdings := handler.getHoldingsPerDay(portfolioId, start, end)
 	previousHistoricalData := map[string][]float64{}
 	for d := start; d.After(end) == false; d = d.AddDate(0, 0, 1) {
 		var dayPrice float64
@@ -43,22 +59,20 @@ func HoldingsPerDay(server *server.Webserver, ctx *gin.Context) {
 		resp = append(resp, []float64{float64(d.UnixMilli()), math.Round(dayPrice*100) / 100})
 	}
 
-	persistAllocations(resp,
+	handler.persistAllocations(resp,
 		portfolioId,
 		holdings,
 		end,
-		previousHistoricalData,
-		server)
+		previousHistoricalData)
 
 	ctx.JSON(http.StatusOK, resp)
 }
 
-func persistAllocations(resp [][]float64,
+func (handler *TotalHoldingsPerDay) persistAllocations(resp [][]float64,
 	portfolioId string,
 	holdings map[time.Time]map[string]float64,
 	end time.Time,
 	previousHistoricalData map[string][]float64,
-	server *server.Webserver,
 ) {
 	endingDaySum := resp[len(resp)-1][1]
 	allocations := &entities.Allocations{
@@ -78,10 +92,10 @@ func persistAllocations(resp [][]float64,
 			Amount:     h,
 		})
 	}
-	server.UnitOfWork.AllocationRepository.Upsert(portfolioId, allocations)
+	handler.allocationRepository.Upsert(portfolioId, allocations)
 }
 
-func processTransactions(transactions entities.Transactions) map[time.Time]entities.Transactions {
+func (handler *TotalHoldingsPerDay) processTransactions(transactions entities.Transactions) map[time.Time]entities.Transactions {
 	mappedTransactions := map[time.Time]entities.Transactions{}
 	for _, transaction := range transactions {
 		truncatedTransactedAt := helpers.TruncateToDay(transaction.TransactedAt)
@@ -90,13 +104,12 @@ func processTransactions(transactions entities.Transactions) map[time.Time]entit
 	return mappedTransactions
 }
 
-func getHoldingsPerDay(server *server.Webserver,
-	portfolioId string,
+func (handler *TotalHoldingsPerDay) getHoldingsPerDay(portfolioId string,
 	start time.Time,
 	end time.Time) map[time.Time]map[string]float64 {
-	transactions := server.UnitOfWork.TransactionRepository.GetHoldingsTransactions(uuid.MustParse(portfolioId))
+	transactions := handler.transactionRepository.GetHoldingsTransactions(uuid.MustParse(portfolioId))
 
-	mappedTransactions := processTransactions(transactions)
+	mappedTransactions := handler.processTransactions(transactions)
 	holdings := map[time.Time]map[string]float64{}
 	for d := start; d.After(end) == false; d = d.AddDate(0, 0, 1) {
 		holdings[d] = map[string]float64{}

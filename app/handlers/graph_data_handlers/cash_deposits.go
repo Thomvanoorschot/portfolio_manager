@@ -2,18 +2,26 @@ package graph_data_handlers
 
 import (
 	"github.com/Rhymond/go-money"
+	"github.com/Thomvanoorschot/portfolioManager/app/data/repositories"
 	"github.com/Thomvanoorschot/portfolioManager/app/helpers"
-	"github.com/Thomvanoorschot/portfolioManager/app/server"
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
 	"net/http"
 	"time"
 )
 
-func CashDeposits(server *server.Webserver, ctx *gin.Context) {
+type CashDeposits struct {
+	transactionRepository *repositories.TransactionRepository
+}
+
+func NewCashDeposits(transactionRepository *repositories.TransactionRepository) *CashDeposits {
+	return &CashDeposits{transactionRepository: transactionRepository}
+}
+
+func (handler *CashDeposits) Handle(ctx *gin.Context) {
 	portfolioId := ctx.Param("portfolioId")
 
-	transactions := server.UnitOfWork.TransactionRepository.GetDepositAndWithdrawalTransactions(uuid.MustParse(portfolioId))
+	transactions := handler.transactionRepository.GetDepositAndWithdrawalTransactions(uuid.MustParse(portfolioId))
 	if len(transactions) == 0 {
 		return
 	}

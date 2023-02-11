@@ -11,8 +11,8 @@ type TransactionRepository struct {
 	DB *gorm.DB
 }
 
-func ProvideTransactionRepository(DB *gorm.DB) TransactionRepository {
-	return TransactionRepository{DB: DB}
+func NewTransactionRepository(DB *gorm.DB) *TransactionRepository {
+	return &TransactionRepository{DB: DB}
 }
 
 func (p *TransactionRepository) Create(transaction *entities.Transaction) {
@@ -25,6 +25,18 @@ func (p *TransactionRepository) GetDepositAndWithdrawalTransactions(id uuid.UUID
 	return transactions
 }
 
+func (p *TransactionRepository) GetHoldingsTransactionsPerSymbol(id uuid.UUID, symbol string) entities.Transactions {
+	transactions := entities.Transactions{}
+	p.DB.Where("transaction_type IN ? "+
+		"AND portfolio_id = ? "+
+		"AND symbol != ? "+
+		"AND symbol = ?",
+		[]enums.TransactionType{enums.Purchase, enums.Sale},
+		id,
+		"",
+		symbol).Order("transacted_at asc").Find(&transactions)
+	return transactions
+}
 func (p *TransactionRepository) GetHoldingsTransactions(id uuid.UUID) entities.Transactions {
 	transactions := entities.Transactions{}
 	p.DB.Where("transaction_type IN ? AND portfolio_id = ? AND symbol != ?", []enums.TransactionType{enums.Purchase, enums.Sale}, id, "").Order("transacted_at asc").Find(&transactions)

@@ -8,8 +8,8 @@ import (
 	"encoding/json"
 	"fmt"
 	"github.com/Thomvanoorschot/portfolioManager/app/data/entities"
+	"github.com/Thomvanoorschot/portfolioManager/app/data/repositories"
 	"github.com/Thomvanoorschot/portfolioManager/app/enums"
-	"github.com/Thomvanoorschot/portfolioManager/app/server"
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
 	"io"
@@ -42,7 +42,18 @@ type YahooSearch struct {
 	} `json:"quotes"`
 }
 
-func DegiroImport(server *server.Webserver, ctx *gin.Context) {
+type DegiroImport struct {
+	portfolioRepository   *repositories.PortfolioRepository
+	transactionRepository *repositories.TransactionRepository
+}
+
+func NewDegiroImport(portfolioRepository *repositories.PortfolioRepository,
+	transactionRepository *repositories.TransactionRepository) *DegiroImport {
+	return &DegiroImport{portfolioRepository: portfolioRepository,
+		transactionRepository: transactionRepository}
+}
+
+func (handler *DegiroImport) Handle(ctx *gin.Context) {
 	fileHeader, _ := ctx.FormFile("file")
 	portfolioId := ctx.Request.Form.Get("portfolioId")
 	file, _ := fileHeader.Open()
@@ -57,7 +68,7 @@ func DegiroImport(server *server.Webserver, ctx *gin.Context) {
 
 	portfolioUuid, err := uuid.Parse(portfolioId)
 	if err == nil {
-		portfolio = server.UnitOfWork.PortfolioRepository.GetIncludingTransactions(portfolioUuid)
+		portfolio = handler.portfolioRepository.GetIncludingTransactions(portfolioUuid)
 	}
 	for {
 		line, readError := reader.Read()
@@ -76,13 +87,13 @@ func DegiroImport(server *server.Webserver, ctx *gin.Context) {
 	}
 	setCommissions(&convertedTransactions, &commissions)
 	if portfolioId == "" {
-		server.UnitOfWork.PortfolioRepository.Create(&entities.Portfolio{
+		handler.portfolioRepository.Create(&entities.Portfolio{
 			Title:        "Main portfolio",
 			Transactions: convertedTransactions,
 			EntityBase:   entities.EntityBase{},
 		})
 	} else {
-		server.UnitOfWork.TransactionRepository.AddToPortfolio(convertedTransactions)
+		handler.transactionRepository.AddToPortfolio(convertedTransactions)
 	}
 }
 

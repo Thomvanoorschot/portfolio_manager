@@ -1,7 +1,7 @@
 package transaction_handlers
 
 import (
-	"github.com/Thomvanoorschot/portfolioManager/app/server"
+	"github.com/Thomvanoorschot/portfolioManager/app/data/repositories"
 	"github.com/gin-gonic/gin"
 	"net/http"
 )
@@ -12,11 +12,18 @@ type UpdateTransactionSymbolsRequest struct {
 	NewSymbol   string `json:"newSymbol"`
 }
 
-func UpdateTransactionSymbols(server *server.Webserver, ctx *gin.Context) {
+type UpdateTransactionSymbols struct {
+	transactionRepository *repositories.TransactionRepository
+}
+
+func NewUpdateTransactionSymbols(transactionRepository *repositories.TransactionRepository) *UpdateTransactionSymbols {
+	return &UpdateTransactionSymbols{transactionRepository: transactionRepository}
+}
+
+func (handler *UpdateTransactionSymbols) Handle(ctx *gin.Context) {
 	requestBody := UpdateTransactionSymbolsRequest{}
 	_ = ctx.BindJSON(&requestBody)
 
-	transactionRepository := server.UnitOfWork.TransactionRepository
-	transactionRepository.UpdateSymbols(requestBody.PortfolioId, requestBody.OldSymbol, requestBody.NewSymbol)
+	handler.transactionRepository.UpdateSymbols(requestBody.PortfolioId, requestBody.OldSymbol, requestBody.NewSymbol)
 	ctx.Status(http.StatusOK)
 }

@@ -12,7 +12,7 @@ type AllocationRepository struct {
 	Rdb *redis.Client
 }
 
-func ProvideAllocationRepository(rdb *redis.Client) *AllocationRepository {
+func NewAllocationRepository(rdb *redis.Client) *AllocationRepository {
 	return &AllocationRepository{Rdb: rdb}
 }
 

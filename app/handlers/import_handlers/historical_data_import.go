@@ -4,7 +4,7 @@ import (
 	"encoding/csv"
 	"fmt"
 	"github.com/Thomvanoorschot/portfolioManager/app/data/entities"
-	"github.com/Thomvanoorschot/portfolioManager/app/server"
+	"github.com/Thomvanoorschot/portfolioManager/app/data/repositories"
 	"github.com/gin-gonic/gin"
 	"gitlab.com/metakeule/fmtdate"
 	"io"
@@ -14,8 +14,19 @@ import (
 	"time"
 )
 
-func HistoricalDataImport(server *server.Webserver, _ *gin.Context) {
-	symbols := server.UnitOfWork.TransactionRepository.GetUniqueSymbols()
+type HistoricalDataImport struct {
+	transactionRepository    *repositories.TransactionRepository
+	historicalDataRepository *repositories.HistoricalDataRepository
+}
+
+func NewHistoricalDataImport(transactionRepository *repositories.TransactionRepository,
+	historicalDataRepository *repositories.HistoricalDataRepository) *HistoricalDataImport {
+	return &HistoricalDataImport{transactionRepository: transactionRepository,
+		historicalDataRepository: historicalDataRepository}
+}
+
+func (handler *HistoricalDataImport) Handle(_ *gin.Context) {
+	symbols := handler.transactionRepository.GetUniqueSymbols()
 	for _, symbol := range symbols {
 		url := fmt.Sprintf("https://query1.finance.yahoo.com/v7/finance/download/%s?period1=%d&period2=%d&interval=1d&events=history&includeAdjustedClose=true",
 			symbol,
@@ -50,7 +61,7 @@ func HistoricalDataImport(server *server.Webserver, _ *gin.Context) {
 			}
 			convertLine(line, historicalData.Entries)
 		}
-		server.UnitOfWork.HistoricalDataRepository.Upsert(&historicalData)
+		handler.historicalDataRepository.Upsert(&historicalData)
 	}
 }
 

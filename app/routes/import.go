@@ -1,20 +1,23 @@
 package routes
 
 import (
-	"github.com/Thomvanoorschot/portfolioManager/app/handlers/import_handlers"
-	"github.com/Thomvanoorschot/portfolioManager/app/server"
+	"github.com/Thomvanoorschot/portfolioManager/app/wire"
 	"github.com/gin-gonic/gin"
+	"github.com/redis/go-redis/v9"
+	"gorm.io/gorm"
 )
 
-func GetImportRoutes(routerGroup *gin.RouterGroup, server *server.Webserver) *gin.RouterGroup {
+func SetupImportRoutes(routerGroup *gin.RouterGroup,
+	postgresClient *gorm.DB,
+	redisClient *redis.Client,
+) *gin.RouterGroup {
+
+	degiroImport := wire.InitializeDegiroImportHandler(postgresClient)
+	historicalDataImport := wire.InitializeHistoricalDataImportHandler(postgresClient, redisClient)
 	r := routerGroup.Group("/import")
 	{
-		r.POST("/degiro", func(ctx *gin.Context) {
-			import_handlers.DegiroImport(server, ctx)
-		})
-		r.POST("/historical", func(ctx *gin.Context) {
-			import_handlers.HistoricalDataImport(server, ctx)
-		})
+		r.POST("/degiro", degiroImport.Handle)
+		r.POST("/historical", historicalDataImport.Handle)
 	}
 	return r
 }

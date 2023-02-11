@@ -10,6 +10,10 @@ type PortfolioRepository struct {
 	DB *gorm.DB
 }
 
+func NewPortfolioRepository(DB *gorm.DB) *PortfolioRepository {
+	return &PortfolioRepository{DB: DB}
+}
+
 func (p *PortfolioRepository) Create(portfolio *entities.Portfolio) {
 	p.DB.Create(portfolio)
 }

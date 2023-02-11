@@ -1,23 +1,22 @@
 package routes
 
 import (
-	"github.com/Thomvanoorschot/portfolioManager/app/handlers/transaction_handlers"
-	"github.com/Thomvanoorschot/portfolioManager/app/server"
+	"github.com/Thomvanoorschot/portfolioManager/app/wire"
 	"github.com/gin-gonic/gin"
+	"gorm.io/gorm"
 )
 
-func GetTransactionRoutes(routerGroup *gin.RouterGroup, server *server.Webserver) *gin.RouterGroup {
+func SetupTransactionRoutes(routerGroup *gin.RouterGroup,
+	postgresClient *gorm.DB,
+) *gin.RouterGroup {
+	getByPortfolioId := wire.InitializeGetByPortfolioIdHandler(postgresClient)
+	update := wire.InitializeUpdateHandler(postgresClient)
+	updateTransactionSymbols := wire.InitializeUpdateTransactionSymbolsHandler(postgresClient)
 	r := routerGroup.Group("/transaction")
 	{
-		r.GET("/:portfolioId", func(ctx *gin.Context) {
-			transaction_handlers.GetByPortfolioId(server, ctx)
-		})
-		r.PUT("/update", func(ctx *gin.Context) {
-			transaction_handlers.Update(server, ctx)
-		})
-		r.PUT("/update-symbols", func(ctx *gin.Context) {
-			transaction_handlers.UpdateTransactionSymbols(server, ctx)
-		})
+		r.GET("/:portfolioId", getByPortfolioId.Handle)
+		r.PUT("/update", update.Handle)
+		r.PUT("/update-symbols", updateTransactionSymbols.Handle)
 	}
 	return r
 }
