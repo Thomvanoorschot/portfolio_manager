@@ -21,7 +21,7 @@ func (handler *GetByPortfolioId) Handle(ctx *gin.Context) {
 	portfolioId := uuid.MustParse(ctx.Param("portfolioId"))
 
 	transactions := handler.transactionRepository.GetByPortfolioId(portfolioId)
-	var transactionsModel []*transaction_models.Model
+	var transactionsModel []*transaction_models.Transaction
 	for _, transaction := range transactions {
 		transactionsModel = append(transactionsModel, transactionMapper.ToViewModel(transaction))
 	}

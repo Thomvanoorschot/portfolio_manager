@@ -5,12 +5,14 @@ import (
 	"fmt"
 	"github.com/Thomvanoorschot/portfolioManager/app/data/entities"
 	"github.com/Thomvanoorschot/portfolioManager/app/data/repositories"
+	"github.com/Thomvanoorschot/portfolioManager/app/enums"
+	"github.com/Thomvanoorschot/portfolioManager/app/time_utils"
 	"github.com/gin-gonic/gin"
+	"github.com/shopspring/decimal"
 	"gitlab.com/metakeule/fmtdate"
 	"io"
 	"log"
 	"net/http"
-	"strconv"
 	"time"
 )
 
@@ -25,11 +27,20 @@ func NewHistoricalDataImport(transactionRepository *repositories.TransactionRepo
 		historicalDataRepository: historicalDataRepository}
 }
 
+var currencyMap = map[string]string{
+	"USD": "EUR=X",
+	"EUR": "EURUSD=X",
+}
+
 func (handler *HistoricalDataImport) Handle(_ *gin.Context) {
-	symbols := handler.transactionRepository.GetUniqueSymbols()
-	for _, symbol := range symbols {
+	symbolAssetTypePairs := handler.transactionRepository.GetUniqueSymbolAssetTypePairs()
+	for _, symbolAssetTypePair := range symbolAssetTypePairs {
+		overriddenSymbol := symbolAssetTypePair.Symbol
+		if symbolAssetTypePair.AssetType == enums.Cash {
+			overriddenSymbol = symbolAssetTypePair.Symbol + "=X"
+		}
 		url := fmt.Sprintf("https://query1.finance.yahoo.com/v7/finance/download/%s?period1=%d&period2=%d&interval=1d&events=history&includeAdjustedClose=true",
-			symbol,
+			overriddenSymbol,
 			time.Now().AddDate(-10, 0, 0).Unix(),
 			time.Now().Unix())
 
@@ -45,10 +56,10 @@ func (handler *HistoricalDataImport) Handle(_ *gin.Context) {
 		firstLineProcessed := false
 
 		historicalData := entities.HistoricalData{
-			Symbol:  symbol,
+			Symbol:  symbolAssetTypePair.Symbol,
 			Entries: map[time.Time]entities.HistoricalDataEntry{},
 		}
-
+		var lastConvertedTime time.Time
 		for {
 			line, readError := reader.Read()
 			if readError == io.EOF {
@@ -59,28 +70,46 @@ func (handler *HistoricalDataImport) Handle(_ *gin.Context) {
 				firstLineProcessed = true
 				continue
 			}
-			convertLine(line, historicalData.Entries)
+			timestamp, _ := fmtdate.Parse("YYYY-MM-DD", line[0])
+			timestamp = timestamp.UTC()
+			for d := timestamp; d.After(lastConvertedTime); d = d.AddDate(0, 0, -1) {
+				if lastConvertedTime.IsZero() {
+					break
+				}
+				if d.Equal(timestamp) {
+					continue
+				}
+				convertLine(d, line, historicalData.Entries)
+			}
+			couldConvert := convertLine(timestamp, line, historicalData.Entries)
+			if couldConvert {
+				lastConvertedTime = timestamp
+			}
+		}
+		now := time_utils.TruncateToDay(time.Now())
+		for d := now; d.After(lastConvertedTime); d = d.AddDate(0, 0, -1) {
+			if lastConvertedTime.IsZero() {
+				break
+			}
+			historicalData.Entries[d] = historicalData.Entries[lastConvertedTime]
 		}
 		handler.historicalDataRepository.Upsert(&historicalData)
 	}
 }
 
-func convertLine(line []string, historicalDataList map[time.Time]entities.HistoricalDataEntry) {
-	timestamp, _ := fmtdate.Parse("YYYY-MM-DD", line[0])
-	timestamp = timestamp.UTC()
+func convertLine(timestamp time.Time, line []string, historicalDataList map[time.Time]entities.HistoricalDataEntry) bool {
 	historicalData := entities.HistoricalDataEntry{}
 	historicalData.Timestamp = timestamp
-	open, _ := strconv.ParseFloat(line[1], 64)
+	open := decimal.RequireFromString(line[1])
+	if open.IsZero() {
+		return false
+	}
 	historicalData.Open = open
-	high, _ := strconv.ParseFloat(line[2], 64)
-	historicalData.High = high
-	low, _ := strconv.ParseFloat(line[3], 64)
-	historicalData.Low = low
-	closeAmount, _ := strconv.ParseFloat(line[4], 64)
-	historicalData.Close = closeAmount
-	adjustedClose, _ := strconv.ParseFloat(line[5], 64)
-	historicalData.AdjustedClose = adjustedClose
-	volume, _ := strconv.Atoi(line[6])
-	historicalData.Volume = volume
+	historicalData.High = decimal.RequireFromString(line[2])
+	historicalData.Low = decimal.RequireFromString(line[3])
+	historicalData.Close = decimal.RequireFromString(line[4])
+	historicalData.AdjustedClose = decimal.RequireFromString(line[5])
+	historicalData.Volume = decimal.RequireFromString(line[6])
 	historicalDataList[timestamp] = historicalData
+	return true
 }

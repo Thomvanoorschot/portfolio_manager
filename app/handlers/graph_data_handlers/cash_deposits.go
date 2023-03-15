@@ -1,11 +1,11 @@
 package graph_data_handlers
 
 import (
-	"github.com/Rhymond/go-money"
 	"github.com/Thomvanoorschot/portfolioManager/app/data/repositories"
-	"github.com/Thomvanoorschot/portfolioManager/app/helpers"
+	"github.com/Thomvanoorschot/portfolioManager/app/time_utils"
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
+	"github.com/shopspring/decimal"
 	"net/http"
 	"time"
 )
@@ -28,17 +28,17 @@ func (handler *CashDeposits) Handle(ctx *gin.Context) {
 
 	var resp [][]float64
 	firstTransaction := transactions[0]
-	start := helpers.TruncateToDay(firstTransaction.TransactedAt)
-	end := helpers.TruncateToDay(time.Now())
+	start := time_utils.TruncateToDay(firstTransaction.TransactedAt)
+	end := time_utils.TruncateToDay(time.Now())
 	for d := start; d.After(end) == false; d = d.AddDate(0, 0, 1) {
-		var cumulativePriceInCentsPerDay int64
+		var cumulativePricePerDay decimal.Decimal
 		for _, transaction := range transactions {
-			truncatedTransactedAt := helpers.TruncateToDay(transaction.TransactedAt)
+			truncatedTransactedAt := time_utils.TruncateToDay(transaction.TransactedAt)
 			if d.After(truncatedTransactedAt) || d.Equal(truncatedTransactedAt) {
-				cumulativePriceInCentsPerDay += transaction.PriceInCents
+				cumulativePricePerDay = cumulativePricePerDay.Add(transaction.Price)
 			}
 		}
-		resp = append(resp, []float64{float64(d.UnixMilli()), money.New(cumulativePriceInCentsPerDay, firstTransaction.CurrencyCode).AsMajorUnits()})
+		resp = append(resp, []float64{float64(d.UnixMilli()), cumulativePricePerDay.InexactFloat64()})
 	}
 	ctx.JSON(http.StatusOK, resp)
 }

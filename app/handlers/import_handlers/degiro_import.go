@@ -12,6 +12,7 @@ import (
 	"github.com/Thomvanoorschot/portfolioManager/app/enums"
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
+	"github.com/shopspring/decimal"
 	"io"
 	"log"
 	"net/http"
@@ -28,12 +29,6 @@ const (
 var (
 	YahooSearches = map[string]*YahooSearch{}
 )
-
-type Commission struct {
-	AmountInCents int64
-	ExternalId    string
-}
-type Commissions []*Commission
 
 type YahooSearch struct {
 	Quotes []struct {
@@ -61,7 +56,6 @@ func (handler *DegiroImport) Handle(ctx *gin.Context) {
 	firstLineProcessed := false
 
 	var convertedTransactions entities.Transactions
-	var commissions Commissions
 	portfolio := &entities.Portfolio{
 		Transactions: entities.Transactions{},
 	}
@@ -80,12 +74,11 @@ func (handler *DegiroImport) Handle(ctx *gin.Context) {
 			firstLineProcessed = true
 			continue
 		}
-		convertTransaction(line, &convertedTransactions, &commissions, portfolio.Transactions, portfolioUuid)
+		convertTransaction(line, &convertedTransactions, portfolio.Transactions, portfolioUuid)
 	}
 	if len(convertedTransactions) == 0 {
 		return
 	}
-	setCommissions(&convertedTransactions, &commissions)
 	if portfolioId == "" {
 		handler.portfolioRepository.Create(&entities.Portfolio{
 			Title:        "Main portfolio",
@@ -97,18 +90,7 @@ func (handler *DegiroImport) Handle(ctx *gin.Context) {
 	}
 }
 
-func setCommissions(transactions *entities.Transactions, commissions *Commissions) {
-	for _, commission := range *commissions {
-		for _, transaction := range *transactions {
-			if transaction.ExternalId == commission.ExternalId {
-				transaction.CommissionInCents += commission.AmountInCents
-			}
-		}
-	}
-}
-
 func convertTransaction(line []string, transactions *entities.Transactions,
-	commissions *Commissions,
 	previouslyConvertedTransactions entities.Transactions,
 	portfolioId uuid.UUID) {
 
@@ -126,7 +108,7 @@ func convertTransaction(line []string, transactions *entities.Transactions,
 	}
 	isCommissionTransaction := line[5] == "DEGIRO Transactiekosten en/of kosten van derden"
 	if isCommissionTransaction {
-		convertCommission(line, commissions)
+		convertCommission(line, transactions, portfolioId)
 		return
 	}
 	isDeposit := line[5] == "Reservation iDEAL / Sofort Deposit" || line[5] == "iDEAL storting"
@@ -156,15 +138,17 @@ func convertTransaction(line []string, transactions *entities.Transactions,
 	}
 }
 
-func convertCommission(line []string, commissions *Commissions) {
-	line[8] = strings.Replace(line[8], ",", ".", -1)
-	cost, _ := strconv.ParseFloat(line[8], 64)
-
-	commission := &Commission{
-		AmountInCents: int64(cost * 100),
-		ExternalId:    line[11],
-	}
-	*commissions = append(*commissions, commission)
+func convertCommission(line []string,
+	transactions *entities.Transactions,
+	portfolioId uuid.UUID) {
+	transaction := &entities.Transaction{}
+	convertGeneralTransactionInfo(line, transaction, portfolioId)
+	transaction.Product = "CASH"
+	transaction.AssetType = enums.Cash
+	transaction.Amount = decimal.NewFromInt(1)
+	transaction.Price = decimal.RequireFromString(line[8])
+	transaction.TransactionType = enums.Commission
+	*transactions = append(*transactions, transaction)
 }
 
 func convertDividend(line []string,
@@ -172,14 +156,10 @@ func convertDividend(line []string,
 	portfolioId uuid.UUID) {
 	transaction := &entities.Transaction{}
 	convertGeneralTransactionInfo(line, transaction, portfolioId)
-	cost, _ := strconv.ParseFloat(line[8], 64)
-	if cost < 0 {
-		return
-	}
 	transaction.Product = "CASH"
 	transaction.AssetType = enums.Cash
-	transaction.Amount = 1
-	transaction.PriceInCents = int64(cost * 100)
+	transaction.Amount = decimal.NewFromInt(1)
+	transaction.Price = decimal.RequireFromString(line[8])
 	transaction.TransactionType = enums.Dividend
 	*transactions = append(*transactions, transaction)
 }
@@ -189,14 +169,10 @@ func convertDividendTax(line []string,
 	portfolioId uuid.UUID) {
 	transaction := &entities.Transaction{}
 	convertGeneralTransactionInfo(line, transaction, portfolioId)
-	cost, _ := strconv.ParseFloat(line[8], 64)
-	if cost < 0 {
-		return
-	}
 	transaction.Product = "CASH"
 	transaction.AssetType = enums.Cash
-	transaction.Amount = 1
-	transaction.PriceInCents = int64(cost * 100)
+	transaction.Amount = decimal.NewFromInt(1)
+	transaction.Price = decimal.RequireFromString(line[8])
 	transaction.TransactionType = enums.DividendTax
 	*transactions = append(*transactions, transaction)
 }
@@ -206,14 +182,10 @@ func convertDebitOrCredit(line []string,
 	portfolioId uuid.UUID) {
 	transaction := &entities.Transaction{}
 	convertGeneralTransactionInfo(line, transaction, portfolioId)
-	cost, _ := strconv.ParseFloat(line[8], 64)
-	if cost < 0 {
-		return
-	}
 	transaction.Product = "CASH"
 	transaction.AssetType = enums.Cash
-	transaction.Amount = 1
-	transaction.PriceInCents = int64(cost * 100)
+	transaction.Amount = decimal.NewFromInt(1)
+	transaction.Price = decimal.RequireFromString(line[8])
 	transaction.Symbol = transaction.CurrencyCode
 	if line[5] == "Valuta Debitering" {
 		transaction.TransactionType = enums.Debit
@@ -227,14 +199,14 @@ func convertDeposit(line []string,
 	portfolioId uuid.UUID) {
 	transaction := &entities.Transaction{}
 	convertGeneralTransactionInfo(line, transaction, portfolioId)
-	cost, _ := strconv.ParseFloat(line[8], 64)
-	if cost < 0 {
+	cost := decimal.RequireFromString(line[8])
+	if cost.IsNegative() {
 		return
 	}
 	transaction.Product = "CASH"
 	transaction.AssetType = enums.Cash
-	transaction.Amount = 1
-	transaction.PriceInCents = int64(cost * 100)
+	transaction.Amount = decimal.NewFromInt(1)
+	transaction.Price = decimal.RequireFromString(line[8])
 	transaction.TransactionType = enums.Deposit
 	transaction.Symbol = transaction.CurrencyCode
 	*transactions = append(*transactions, transaction)
@@ -244,11 +216,10 @@ func convertWithdrawal(line []string,
 	portfolioId uuid.UUID) {
 	transaction := &entities.Transaction{}
 	convertGeneralTransactionInfo(line, transaction, portfolioId)
-	cost, _ := strconv.ParseFloat(line[8], 64)
 	transaction.Product = "CASH"
 	transaction.AssetType = enums.Cash
-	transaction.Amount = 1
-	transaction.PriceInCents = int64(cost * 100)
+	transaction.Amount = decimal.NewFromInt(1)
+	transaction.Price = decimal.RequireFromString(line[8])
 	transaction.TransactionType = enums.Withdrawal
 	transaction.Symbol = transaction.CurrencyCode
 	*transactions = append(*transactions, transaction)
@@ -263,14 +234,13 @@ func convertBuyOrSellTransaction(line []string,
 	parsedDescription := r.FindStringSubmatch(line[5])
 
 	transactionType, _ := entities.ConvertToTransactionType(parsedDescription[1])
-	amount, _ := strconv.ParseFloat(parsedDescription[2], 64)
+	amount := decimal.RequireFromString(parsedDescription[2])
 	if transactionType == enums.Sale {
-		amount = amount * -1
+		amount = amount.Mul(decimal.NewFromInt(-1))
 	}
 	parsedDescription[3] = strings.Replace(parsedDescription[3], ",", ".", -1)
-	pricePerUnit, _ := strconv.ParseFloat(parsedDescription[3], 64)
 	transaction.Amount = amount
-	transaction.PriceInCents = int64(pricePerUnit * 100)
+	transaction.Price = decimal.RequireFromString(parsedDescription[3])
 	transaction.TransactionType = transactionType
 	searchResult, err := yahooSearch(transaction.ISIN)
 	if err == nil && len(searchResult.Quotes) > 0 {

@@ -12,4 +12,5 @@ const (
 	Credit                                 = "Credit"
 	Dividend                               = "Dividend"
 	DividendTax                            = "DividendTax"
+	Commission                             = "Commission"
 )

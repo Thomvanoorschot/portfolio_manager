@@ -17,7 +17,7 @@ func NewUpdate(transactionRepository *repositories.TransactionRepository) *Updat
 }
 
 func (handler *Update) Handle(ctx *gin.Context) {
-	requestBody := &transaction_models.Model{}
+	requestBody := &transaction_models.Transaction{}
 	_ = ctx.BindJSON(requestBody)
 
 	transaction := transaction_mapper.ToDbModel(requestBody)

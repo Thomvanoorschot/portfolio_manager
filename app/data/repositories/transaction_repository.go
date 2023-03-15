@@ -3,6 +3,7 @@ package repositories
 import (
 	"github.com/Thomvanoorschot/portfolioManager/app/data/entities"
 	"github.com/Thomvanoorschot/portfolioManager/app/enums"
+	"github.com/Thomvanoorschot/portfolioManager/app/models/transaction_models"
 	"github.com/google/uuid"
 	"gorm.io/gorm"
 )
@@ -80,11 +81,8 @@ func (p *TransactionRepository) Update(transaction *entities.Transaction) {
 		"symbol").Updates(transaction)
 }
 
-//
-//TransactedAt:      requestBody.TransactedAt,
-//CurrencyCode:      requestBody.CurrencyCode,
-//TransactionType:   requestBody.TransactionType,
-//Amount:            requestBody.Amount,
-//PriceInCents:      requestBody.PriceInCents,
-//CommissionInCents: requestBody.CommissionInCents,
-//Symbol:            requestBody.Symbol,
+func (p *TransactionRepository) GetUniqueSymbolAssetTypePairs() []transaction_models.SymbolAssetTypePair {
+	var symbols []transaction_models.SymbolAssetTypePair
+	p.DB.Model(&entities.Transaction{}).Where("symbol IS NOT NULL AND symbol != ? AND transaction_type IN ?", "", []enums.TransactionType{enums.Purchase, enums.Sale}).Distinct("symbol").Select("symbol", "asset_type").Find(&symbols)
+	return symbols
+}

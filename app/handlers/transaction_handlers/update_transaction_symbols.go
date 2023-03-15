@@ -7,9 +7,13 @@ import (
 )
 
 type UpdateTransactionSymbolsRequest struct {
-	PortfolioId string `json:"portfolioId"`
-	OldSymbol   string `json:"oldSymbol"`
-	NewSymbol   string `json:"newSymbol"`
+	PortfolioId string         `json:"portfolioId"`
+	SymbolPairs []SymbolUpdate `json:"symbolPairs"`
+}
+
+type SymbolUpdate struct {
+	OldSymbol string `json:"oldSymbol"`
+	NewSymbol string `json:"newSymbol"`
 }
 
 type UpdateTransactionSymbols struct {
@@ -23,7 +27,8 @@ func NewUpdateTransactionSymbols(transactionRepository *repositories.Transaction
 func (handler *UpdateTransactionSymbols) Handle(ctx *gin.Context) {
 	requestBody := UpdateTransactionSymbolsRequest{}
 	_ = ctx.BindJSON(&requestBody)
-
-	handler.transactionRepository.UpdateSymbols(requestBody.PortfolioId, requestBody.OldSymbol, requestBody.NewSymbol)
+	for _, symbolPair := range requestBody.SymbolPairs {
+		handler.transactionRepository.UpdateSymbols(requestBody.PortfolioId, symbolPair.OldSymbol, symbolPair.NewSymbol)
+	}
 	ctx.Status(http.StatusOK)
 }

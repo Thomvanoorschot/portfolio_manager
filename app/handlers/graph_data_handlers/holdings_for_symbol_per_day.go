@@ -33,7 +33,7 @@ package graph_data_handlers
 //	for d := start; d.After(end) == false; d = d.AddDate(0, 0, 1) {
 //		var dayPrice float64
 //		for symbol, h := range holdings[d] {
-//			adjustedClose := historicalData[symbol][d].AdjustedClose
+//			adjustedClose := historicalData[symbol][d].AdjustedCloseInFractionalUnits
 //			if adjustedClose != 0 {
 //				previousHistoricalData[symbol] = append(previousHistoricalData[symbol], adjustedClose)
 //			} else {
@@ -64,7 +64,7 @@ package graph_data_handlers
 //	endingDaySum := resp[len(resp)-1][1]
 //	allocations := &entities.Allocations{
 //		PortfolioId: portfolioId,
-//		Total:       endingDaySum,
+//		TotalInFractionalUnits:       endingDaySum,
 //	}
 //	for symbol, h := range holdings[end] {
 //		if h == 0 {
@@ -74,9 +74,9 @@ package graph_data_handlers
 //		total := endingDaySymbolTotalValue * h
 //		allocations.Entries = append(allocations.Entries, &entities.AllocationEntry{
 //			Symbol:     symbol,
-//			Percentage: total / endingDaySum * 100,
-//			Total:      total,
-//			Amount:     h,
+//			PercentageOfTotal: total / endingDaySum * 100,
+//			TotalInFractionalUnits:      total,
+//			AmountInFractionalUnits:     h,
 //		})
 //	}
 //	server.UnitOfWork.AllocationRepository.Upsert(portfolioId, allocations)
@@ -111,7 +111,7 @@ package graph_data_handlers
 //			holdings[d] = copyOfPreviousDay
 //		}
 //		for _, transaction := range transactions {
-//			holdings[d][transaction.Symbol] += transaction.Amount
+//			holdings[d][transaction.Symbol] += transaction.AmountInFractionalUnits
 //		}
 //	}
 //	return holdings

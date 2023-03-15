@@ -1,4 +1,4 @@
-package helpers
+package time_utils
 
 import "time"
 

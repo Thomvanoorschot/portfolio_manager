@@ -4,6 +4,7 @@ import (
 	"errors"
 	"github.com/Thomvanoorschot/portfolioManager/app/enums"
 	"github.com/google/uuid"
+	"github.com/shopspring/decimal"
 	"time"
 )
 
@@ -20,20 +21,19 @@ func ConvertToTransactionType(transactionType string) (enums.TransactionType, er
 
 type Transaction struct {
 	EntityBase
-	PortfolioID       uuid.UUID
-	TransactedAt      time.Time
-	Symbol            string
-	ISIN              string
-	Product           string
-	CurrencyCode      string
-	Description       string
-	Amount            float64
-	PriceInCents      int64
-	CommissionInCents int64
-	ExternalId        string
-	TransactionType   enums.TransactionType `gorm:"default:Unknown"`
-	AssetType         enums.AssetType       `gorm:"default:Unknown"`
-	UniqueHash        string
+	PortfolioID     uuid.UUID
+	TransactedAt    time.Time
+	Symbol          string
+	ISIN            string
+	Product         string
+	CurrencyCode    string
+	Description     string
+	Amount          decimal.Decimal
+	Price           decimal.Decimal
+	ExternalId      string
+	TransactionType enums.TransactionType `gorm:"default:Unknown"`
+	AssetType       enums.AssetType       `gorm:"default:Unknown"`
+	UniqueHash      string
 }
 
 type Transactions []*Transaction

@@ -4,7 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"github.com/Thomvanoorschot/portfolioManager/app/data/entities"
-	"github.com/Thomvanoorschot/portfolioManager/app/helpers"
+	"github.com/Thomvanoorschot/portfolioManager/app/time_utils"
 	"github.com/redis/go-redis/v9"
 	"time"
 )
@@ -40,7 +40,7 @@ func (p *HistoricalDataRepository) GetLastBySymbol(symbols []string) map[string]
 	bySymbols := p.GetBySymbols(symbols)
 	for s, dataPerSymbol := range bySymbols {
 		for i := 0; i < 30; i++ {
-			last := dataPerSymbol[helpers.TruncateToDay(time.Now().AddDate(0, 0, -i))]
+			last := dataPerSymbol[time_utils.TruncateToDay(time.Now().AddDate(0, 0, -i))]
 			if &last != nil {
 				m[s] = &last
 				break
