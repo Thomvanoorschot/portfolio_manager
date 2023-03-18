@@ -100,10 +100,11 @@ func (handler *HistoricalDataImport) Handle(_ *gin.Context) {
 func convertLine(timestamp time.Time, line []string, historicalDataList map[time.Time]entities.HistoricalDataEntry) bool {
 	historicalData := entities.HistoricalDataEntry{}
 	historicalData.Timestamp = timestamp
-	open := decimal.RequireFromString(line[1])
-	if open.IsZero() {
+	open, err := decimal.NewFromString(line[1])
+	if err != nil || open.IsZero() {
 		return false
 	}
+
 	historicalData.Open = open
 	historicalData.High = decimal.RequireFromString(line[2])
 	historicalData.Low = decimal.RequireFromString(line[3])
